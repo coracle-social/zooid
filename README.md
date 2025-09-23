@@ -1,10 +1,10 @@
-# Costasiella
+# Zooid
 
 This is a multi-tenant relay based on [Khatru](https://gitworkshop.dev/fiatjaf.com/nostrlib/tree/master/khatru) which implements a range of access controls. It's designed to be used with [Flotilla](https://flotilla.social) as a community relay (complete with NIP 29 support), but it can also be used outside of a community context.
 
 ## Architecture
 
-A single Costasiella instance can run any number of "virtual" relays. The `config` directory can contain any number of configuration files, each of which represents a single virtual relay.
+A single zooid instance can run any number of "virtual" relays. The `config` directory can contain any number of configuration files, each of which represents a single virtual relay.
 
 ## Configuration
 
@@ -79,4 +79,4 @@ auto_join = false
 
 ## Development
 
-Run `go run .` to run the project and `go build .` to build it. Be sure to run `gofmt -s -w .` before committing.
+See `justfile` for defined commands.
