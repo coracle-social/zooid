@@ -1,7 +1,7 @@
 package sqlite
 
 import (
-  "errors"
+	"errors"
 	"fiatjaf.com/nostr"
 )
 

@@ -32,12 +32,12 @@ type Config struct {
 	} `toml:"blossom"`
 
 	Roles map[string]struct {
-		Pubkeys      []string `toml:"pubkeys"`
-		CanInvite    bool     `toml:"can_invite"`
+		Pubkeys   []string `toml:"pubkeys"`
+		CanInvite bool     `toml:"can_invite"`
 	} `toml:"roles"`
 
 	Data struct {
-		Events string `toml:"events"`
+		Events  string `toml:"events"`
 		Blossom string `toml:"blossom"`
 	} `toml:"data"`
 }

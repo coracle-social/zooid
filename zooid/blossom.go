@@ -21,7 +21,7 @@ func EnableBlossom(instance *Instance) {
 	}
 
 	store := &sqlite.SqliteBackend{
-  	Path: instance.Config.Data.Blossom,
+		Path: instance.Config.Data.Blossom,
 	}
 
 	backend := blossom.New(instance.Relay, "https://"+instance.Host)

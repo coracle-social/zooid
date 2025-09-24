@@ -1,18 +1,23 @@
 package zooid
 
 import (
-	"sync"
-	"iter"
-	"net/http"
 	"context"
+	"iter"
+	"log"
+	"net/http"
+	"os"
+	"sync"
 
-	"fiatjaf.com/nostr/khatru"
 	"fiatjaf.com/nostr"
+	"fiatjaf.com/nostr/eventstore"
+	"fiatjaf.com/nostr/khatru"
+	"zooid/sqlite"
 )
 
 type Instance struct {
 	Host   string
 	Config *Config
+	Events eventstore.Store
 	Relay  *khatru.Relay
 }
 
@@ -35,6 +40,7 @@ func MakeInstance(hostname string) (*Instance, error) {
 	instance := &Instance{
 		Host:   hostname,
 		Config: config,
+		Events: &sqlite.SqliteBackend{Path: config.Data.Events},
 		Relay:  khatru.NewRelay(),
 	}
 
@@ -45,6 +51,8 @@ func MakeInstance(hostname string) (*Instance, error) {
 	// instance.Relay.Info.Self = nostr.GetPublicKey(secret)
 	instance.Relay.Info.Software = "https://github.com/coracle-social/zooid"
 	instance.Relay.Info.Version = "v0.1.0"
+
+	instance.Relay.UseEventstore(instance.Events, 400)
 
 	instance.Relay.OnConnect = instance.OnConnect
 	instance.Relay.OnEvent = instance.OnEvent
@@ -68,6 +76,16 @@ func MakeInstance(hostname string) (*Instance, error) {
 
 	if config.Management.Enabled {
 		EnableManagement(instance)
+	}
+
+	// Initialize stuff
+
+	if err := os.MkdirAll(instance.Config.Data.Events, 0755); err != nil {
+		log.Fatal("Failed to create event store path:", err)
+	}
+
+	if err := instance.Events.Init(); err != nil {
+		log.Fatal("Failed to initialize event store:", err)
 	}
 
 	return instance, nil
@@ -114,23 +132,23 @@ func (instance *Instance) IsMember(pubkey nostr.PubKey) bool {
 // Handlers
 
 func (instance *Instance) OnConnect(ctx context.Context) {
-  khatru.RequestAuth(ctx)
+	khatru.RequestAuth(ctx)
 }
 
 func (instance *Instance) OnEvent(ctx context.Context, event nostr.Event) (reject bool, msg string) {
-  return false, ""
+	return false, ""
 }
 
 func (instance *Instance) StoreEvent(ctx context.Context, event nostr.Event) error {
-  return nil
+	return instance.Events.SaveEvent(event)
 }
 
 func (instance *Instance) ReplaceEvent(ctx context.Context, event nostr.Event) error {
-  return nil
+	return instance.Events.ReplaceEvent(event)
 }
 
 func (instance *Instance) DeleteEvent(ctx context.Context, id nostr.ID) error {
-  return nil
+	return instance.Events.DeleteEvent(id)
 }
 
 func (instance *Instance) OnEventSaved(ctx context.Context, event nostr.Event) {
@@ -140,20 +158,23 @@ func (instance *Instance) OnEphemeralEvent(ctx context.Context, event nostr.Even
 }
 
 func (instance *Instance) OnRequest(ctx context.Context, filter nostr.Filter) (reject bool, msg string) {
-  return false, ""
+	return false, ""
 }
 
 func (instance *Instance) QueryStored(ctx context.Context, filter nostr.Filter) iter.Seq[nostr.Event] {
 	return func(yield func(nostr.Event) bool) {
-		// TODO: Implement actual event querying logic
-		// For now, return empty sequence
+		for evt := range instance.Events.QueryEvents(filter, 400) {
+			if !yield(evt) {
+				return
+			}
+		}
 	}
 }
 
 func (instance *Instance) RejectConnection(r *http.Request) bool {
-  return false
+	return false
 }
 
 func (instance *Instance) PreventBroadcast(ws *khatru.WebSocket, event nostr.Event) bool {
-  return event.Kind == 28934
+	return event.Kind == 28934
 }
