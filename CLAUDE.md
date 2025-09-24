@@ -14,3 +14,13 @@
 - **zooid/util.go**: Environment variable utilities with `Env()` function.
 
 - **cmd/relay/main.go**: HTTP server entry point with graceful shutdown.
+
+## SQLite EventStore
+
+The `sqlite/` directory contains a complete SQLite-based khatru eventstore implementation.
+
+### nostrlib API Compatibility
+- `Event.Sig` is `[64]byte`, not a separate Signature type
+- `Event.CreatedAt` is `nostr.Timestamp` (int64), not `time.Time`
+- Use `hex.EncodeToString(evt.Sig[:])` for signature serialization
+- Use `hex.DecodeString()` and `copy()` for signature parsing
