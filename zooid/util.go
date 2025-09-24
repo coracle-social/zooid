@@ -6,6 +6,11 @@ import (
 	"sync"
 )
 
+const (
+	AUTH_JOIN   = 28934
+	AUTH_INVITE = 28935
+)
+
 var (
 	env     map[string]string
 	envOnce sync.Once

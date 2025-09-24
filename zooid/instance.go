@@ -176,5 +176,5 @@ func (instance *Instance) RejectConnection(r *http.Request) bool {
 }
 
 func (instance *Instance) PreventBroadcast(ws *khatru.WebSocket, event nostr.Event) bool {
-	return event.Kind == 28934
+	return event.Kind == AUTH_JOIN
 }
