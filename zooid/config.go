@@ -21,15 +21,23 @@ type Config struct {
 		AutoLeave bool `toml:"auto_leave"`
 	} `toml:"groups"`
 
+	Management struct {
+		Enabled bool     `toml:"enabled"`
+		Methods []string `toml:"methods"`
+	} `toml:"management"`
+
+	Blossom struct {
+		Enabled   bool   `toml:"enabled"`
+		Directory string `toml:"directory"`
+	} `toml:"blossom"`
+
 	Roles map[string]struct {
 		Pubkeys      []string `toml:"pubkeys"`
-		Nip86Methods []string `toml:"nip86_methods"`
 		CanInvite    bool     `toml:"can_invite"`
 	} `toml:"roles"`
 
 	Data struct {
-		Sqlite string `toml:"sqlite"`
-		Media  string `toml:"media"`
+		Events string `toml:"events"`
 	} `toml:"data"`
 }
 
