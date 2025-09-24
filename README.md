@@ -61,6 +61,7 @@ A special `[roles.member]` heading may be used to configure policies for all rel
 Contains information related to data persistence.
 
 - `events` - the location of the sqlite database file used to store events. Defaults to `./data/{my-relay}/events`.
+- `media` - the location of the sqlite database file used to store file metadata. Defaults to `./data/{my-relay}/media`.
 
 ### Example
 

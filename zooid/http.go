@@ -6,12 +6,12 @@ import (
 )
 
 func ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	relay, err := GetRelay(r.Host)
+	instance, err := GetInstance(r.Host)
 	if err != nil {
-		log.Printf("Failed to load relay config for hostname %s: %v", r.Host, err)
+		log.Printf("Failed to load config for hostname %s: %v", r.Host, err)
 		http.Error(w, "Not Found", http.StatusNotFound)
 		return
 	}
 
-	relay.ServeHTTP(w, r)
+	instance.Relay.ServeHTTP(w, r)
 }

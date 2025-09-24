@@ -38,6 +38,7 @@ type Config struct {
 
 	Data struct {
 		Events string `toml:"events"`
+		Blossom string `toml:"blossom"`
 	} `toml:"data"`
 }
 

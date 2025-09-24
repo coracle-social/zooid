@@ -1,9 +1,8 @@
 package zooid
 
 import (
-	"fiatjaf.com/nostr/khatru"
 )
 
-func EnableGroups(config *Config, relay *khatru.Relay) {
-	relay.Info.SupportedNIPs = append(relay.Info.SupportedNIPs, 29)
+func EnableGroups(instance *Instance) {
+	instance.Relay.Info.SupportedNIPs = append(instance.Relay.Info.SupportedNIPs, 29)
 }
