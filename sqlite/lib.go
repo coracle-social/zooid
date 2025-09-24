@@ -3,7 +3,6 @@ package sqlite
 import (
 	"database/sql"
 	"fmt"
-	"sync"
 
 	"fiatjaf.com/nostr/eventstore"
 	_ "github.com/mattn/go-sqlite3"
@@ -12,11 +11,8 @@ import (
 var _ eventstore.Store = (*SqliteBackend)(nil)
 
 type SqliteBackend struct {
-	sync.RWMutex
-	// Path is where the database will be saved
-	Path string
-
 	db           *sql.DB
+	Path         string
 	FTSAvailable bool
 }
 

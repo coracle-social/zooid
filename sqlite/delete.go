@@ -2,12 +2,11 @@ package sqlite
 
 import (
 	"fiatjaf.com/nostr"
+	"github.com/Masterminds/squirrel"
 )
 
 func (s *SqliteBackend) DeleteEvent(id nostr.ID) error {
-	s.Lock()
-	defer s.Unlock()
+	_, err := squirrel.Delete("events").Where(squirrel.Eq{"id": id.Hex()}).RunWith(s.db).Exec()
 
-	_, err := s.db.Exec("DELETE FROM events WHERE id = ?", id.Hex())
 	return err
 }

@@ -8,9 +8,6 @@ import (
 )
 
 func (s *SqliteBackend) ReplaceEvent(evt nostr.Event) error {
-	s.Lock()
-	defer s.Unlock()
-
 	filter := nostr.Filter{Kinds: []nostr.Kind{evt.Kind}, Authors: []nostr.PubKey{evt.PubKey}}
 	if evt.Kind.IsAddressable() {
 		filter.Tags = nostr.TagMap{"d": []string{evt.Tags.GetD()}}
