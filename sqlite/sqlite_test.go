@@ -12,7 +12,8 @@ func TestSqliteFlow(t *testing.T) {
 	os.RemoveAll("/tmp/sqlitetest.db")
 
 	sb := &SqliteBackend{
-		Path: "/tmp/sqlitetest.db",
+		Path:   "/tmp/sqlitetest.db",
+		Prefix: "prefix",
 	}
 	err := sb.Init()
 	assert.NoError(t, err)

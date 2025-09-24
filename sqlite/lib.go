@@ -1,8 +1,10 @@
 package sqlite
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
+	"text/template"
 
 	"fiatjaf.com/nostr/eventstore"
 	_ "github.com/mattn/go-sqlite3"
@@ -13,6 +15,7 @@ var _ eventstore.Store = (*SqliteBackend)(nil)
 type SqliteBackend struct {
 	db           *sql.DB
 	Path         string
+	Prefix       string
 	FTSAvailable bool
 }
 
@@ -41,10 +44,20 @@ func (s *SqliteBackend) Init() error {
 	return nil
 }
 
+func (s *SqliteBackend) tmpl(t string) string {
+	var buf bytes.Buffer
+	err := template.Must(template.New("schema").Parse(t)).Execute(&buf, s)
+	if err != nil {
+		panic(err)
+	}
+
+	return buf.String()
+}
+
 func (s *SqliteBackend) createSchema() error {
 	// Create basic schema first
-	basicSchema := `
-	CREATE TABLE IF NOT EXISTS events (
+	basicSchema := s.tmpl(`
+	CREATE TABLE IF NOT EXISTS {{.Prefix}}events (
 		id TEXT PRIMARY KEY,
 		created_at INTEGER NOT NULL,
 		kind INTEGER NOT NULL,
@@ -54,23 +67,23 @@ func (s *SqliteBackend) createSchema() error {
 		sig TEXT NOT NULL
 	);
 
-	CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at);
-	CREATE INDEX IF NOT EXISTS idx_events_kind ON events(kind);
-	CREATE INDEX IF NOT EXISTS idx_events_pubkey ON events(pubkey);
-	CREATE INDEX IF NOT EXISTS idx_events_kind_pubkey ON events(kind, pubkey);
-	CREATE INDEX IF NOT EXISTS idx_events_kind_pubkey_created_at ON events(kind, pubkey, created_at DESC);
+	CREATE INDEX IF NOT EXISTS {{.Prefix}}idx_events_created_at ON {{.Prefix}}events(created_at);
+	CREATE INDEX IF NOT EXISTS {{.Prefix}}idx_events_kind ON {{.Prefix}}events(kind);
+	CREATE INDEX IF NOT EXISTS {{.Prefix}}idx_events_pubkey ON {{.Prefix}}events(pubkey);
+	CREATE INDEX IF NOT EXISTS {{.Prefix}}idx_events_kind_pubkey ON {{.Prefix}}events(kind, pubkey);
+	CREATE INDEX IF NOT EXISTS {{.Prefix}}idx_events_kind_pubkey_created_at ON {{.Prefix}}events(kind, pubkey, created_at DESC);
 
-	CREATE TABLE IF NOT EXISTS event_tags (
+	CREATE TABLE IF NOT EXISTS {{.Prefix}}event_tags (
 		event_id TEXT NOT NULL,
 		key TEXT NOT NULL,
 		value TEXT NOT NULL,
-		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+		FOREIGN KEY (event_id) REFERENCES {{.Prefix}}events(id) ON DELETE CASCADE
 	);
 
-	CREATE INDEX IF NOT EXISTS idx_event_tags_event_id ON event_tags(event_id);
-	CREATE INDEX IF NOT EXISTS idx_event_tags_key ON event_tags(key);
-	CREATE INDEX IF NOT EXISTS idx_event_tags_key_value ON event_tags(key, value);
-	`
+	CREATE INDEX IF NOT EXISTS {{.Prefix}}idx_event_tags_event_id ON {{.Prefix}}event_tags(event_id);
+	CREATE INDEX IF NOT EXISTS {{.Prefix}}idx_event_tags_key ON {{.Prefix}}event_tags(key);
+	CREATE INDEX IF NOT EXISTS {{.Prefix}}idx_event_tags_key_value ON {{.Prefix}}event_tags(key, value);
+	`)
 
 	if _, err := s.db.Exec(basicSchema); err != nil {
 		return fmt.Errorf("failed to create schema: %w", err)
@@ -78,23 +91,26 @@ func (s *SqliteBackend) createSchema() error {
 
 	// Try to create FTS5 schema - if it fails, continue without it
 	ftsSchema := `
-	CREATE VIRTUAL TABLE IF NOT EXISTS events_fts USING fts5(
+	CREATE VIRTUAL TABLE IF NOT EXISTS {{.Prefix}}events_fts USING fts5(
 		content,
-		content='events',
+		content='{{.Prefix}}events',
 		content_rowid='rowid'
 	);
 
-	CREATE TRIGGER IF NOT EXISTS events_ai AFTER INSERT ON events BEGIN
-		INSERT INTO events_fts(rowid, content) VALUES (new.rowid, new.content);
+	CREATE TRIGGER IF NOT EXISTS {{.Prefix}}events_ai AFTER INSERT ON {{.Prefix}}events BEGIN
+		INSERT INTO {{.Prefix}}events_fts(rowid, content) VALUES (new.rowid, new.content);
 	END;
 
-	CREATE TRIGGER IF NOT EXISTS events_ad AFTER DELETE ON events BEGIN
-		INSERT INTO events_fts(events_fts, rowid, content) VALUES('delete', old.rowid, old.content);
+	CREATE TRIGGER IF NOT EXISTS {{.Prefix}}events_ad AFTER DELETE ON {{.Prefix}}events BEGIN
+		INSERT INTO {{.Prefix}}events_fts({{.Prefix}}events_fts, rowid, content)
+		VALUES('delete', old.rowid, old.content);
 	END;
 
-	CREATE TRIGGER IF NOT EXISTS events_au AFTER UPDATE ON events BEGIN
-		INSERT INTO events_fts(events_fts, rowid, content) VALUES('delete', old.rowid, old.content);
-		INSERT INTO events_fts(rowid, content) VALUES (new.rowid, new.content);
+	CREATE TRIGGER IF NOT EXISTS {{.Prefix}}events_au AFTER UPDATE ON {{.Prefix}}events BEGIN
+		INSERT INTO {{.Prefix}}events_fts({{.Prefix}}events_fts, rowid, content)
+		VALUES('delete', old.rowid, old.content);
+		INSERT INTO {{.Prefix}}events_fts(rowid, content)
+		VALUES (new.rowid, new.content);
 	END;
 	`
 

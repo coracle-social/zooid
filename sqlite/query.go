@@ -76,12 +76,12 @@ func (s *SqliteBackend) QueryEvents(filter nostr.Filter, maxLimit int) iter.Seq[
 
 func (s *SqliteBackend) buildSelectQuery(filter nostr.Filter, limit int) squirrel.SelectBuilder {
 	qb := squirrel.Select("id", "created_at", "kind", "pubkey", "content", "tags", "sig").
-		From("events").
+		From(s.tmpl("{{.Prefix}}events")).
 		OrderBy("created_at DESC")
 
 	// Handle search with FTS (if available)
 	if filter.Search != "" && s.FTSAvailable {
-		qb = qb.Join("events_fts ON events.rowid = events_fts.rowid").
+		qb = qb.Join(s.tmpl("{{.Prefix}}events_fts ON {{.Prefix}}events.rowid = {{.Prefix}}events_fts.rowid")).
 			Where(squirrel.Eq{"events_fts": filter.Search})
 	} else if filter.Search != "" {
 		// Fallback to LIKE search if FTS not available
@@ -128,7 +128,7 @@ func (s *SqliteBackend) buildSelectQuery(filter nostr.Filter, limit int) squirre
 			}
 
 			subQuery := squirrel.Select("event_id").
-				From("event_tags").
+				From(s.tmpl("{{.Prefix}}event_tags")).
 				Where(squirrel.Eq{"key": tagKey}).
 				Where(squirrel.Eq{"value": tagValueInterfaces})
 

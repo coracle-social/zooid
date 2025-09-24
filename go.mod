@@ -5,6 +5,8 @@ go 1.24.1
 require (
 	fiatjaf.com/nostr v0.0.0-20250924142401-59bd3c29fffd
 	github.com/BurntSushi/toml v1.5.0
+	github.com/Masterminds/squirrel v1.5.4
+	github.com/gosimple/slug v1.15.0
 	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/spf13/afero v1.15.0
 	github.com/stretchr/testify v1.10.0
@@ -12,8 +14,6 @@ require (
 
 require (
 	github.com/ImVexed/fasturl v0.0.0-20230304231329-4e41488060f3 // indirect
-	github.com/Masterminds/squirrel v1.5.4 // indirect
-	github.com/PowerDNS/lmdb-go v1.9.3 // indirect
 	github.com/andybalholm/brotli v1.1.1 // indirect
 	github.com/bep/debounce v1.2.1 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4 // indirect
@@ -23,6 +23,7 @@ require (
 	github.com/decred/dcrd/crypto/blake256 v1.1.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0 // indirect
 	github.com/fasthttp/websocket v1.5.12 // indirect
+	github.com/gosimple/unidecode v1.0.1 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect

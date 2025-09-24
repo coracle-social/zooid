@@ -6,6 +6,13 @@ This is a multi-tenant relay based on [Khatru](https://gitworkshop.dev/fiatjaf.c
 
 A single zooid instance can run any number of "virtual" relays. The `config` directory can contain any number of configuration files, each of which represents a single virtual relay.
 
+## Environment
+
+Zooid supports a few environment variables, which configure shared resources, like the web server or sqlite database file.
+
+- `PORT` - the port the server will listen on for all requests. Defaults to `3334`.
+- `DATABASE_PATH` - the location of the database path. Defaults to `./data.db`
+
 ## Configuration
 
 Configuration files are written using [toml](https://toml.io). The name of the configuration file should be the hostname the relay serves, for example `relay.example.com`. Config files contain the following sections:
@@ -55,13 +62,6 @@ Defines roles that can be assigned to different users and attendant privileges. 
 - `can_invite` - a boolean indicating whether this role can invite new members to the relay by requesting a `kind 28935` claim. Defaults to `false`. See [access requests](https://github.com/nostr-protocol/nips/pull/1079) for more details.
 
 A special `[roles.member]` heading may be used to configure policies for all relay users (that is, pubkeys assigned to other roles, or who have redeemed an invite code).
-
-### `[data]`
-
-Contains information related to data persistence.
-
-- `events` - the location of the sqlite database file used to store events. Defaults to `./data/{my-relay}/events`.
-- `media` - the location of the sqlite database file used to store file metadata. Defaults to `./data/{my-relay}/media`.
 
 ### Example
 

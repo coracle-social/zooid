@@ -13,7 +13,7 @@ import (
 func (s *SqliteBackend) SaveEvent(evt nostr.Event) error {
 	// Check if event already exists
 	var existingID string
-	qb := squirrel.Select("id").From("events").Where(squirrel.Eq{"id": evt.ID.Hex()})
+	qb := squirrel.Select("id").From(s.tmpl("{{.Prefix}}events")).Where(squirrel.Eq{"id": evt.ID.Hex()})
 	err := qb.RunWith(s.db).QueryRow().Scan(&existingID)
 	if err == nil {
 		// Event already exists
@@ -27,7 +27,7 @@ func (s *SqliteBackend) SaveEvent(evt nostr.Event) error {
 	}
 
 	// Insert the event
-	insertQb := squirrel.Insert("events").
+	insertQb := squirrel.Insert(s.tmpl("{{.Prefix}}events")).
 		Columns("id", "created_at", "kind", "pubkey", "content", "tags", "sig").
 		Values(
 			evt.ID.Hex(),
@@ -48,7 +48,7 @@ func (s *SqliteBackend) SaveEvent(evt nostr.Event) error {
 	// Insert single-letter tags into event_tags table
 	for _, tag := range evt.Tags {
 		if len(tag) >= 2 && len(tag[0]) == 1 {
-			tagQb := squirrel.Insert("event_tags").
+			tagQb := squirrel.Insert(s.tmpl("{{.Prefix}}event_tags")).
 				Columns("event_id", "key", "value").
 				Values(evt.ID.Hex(), tag[0], tag[1])
 
