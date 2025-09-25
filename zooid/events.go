@@ -3,7 +3,6 @@ package zooid
 import (
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"iter"
 
@@ -314,6 +313,18 @@ func (events *EventStore) ReplaceEvent(evt nostr.Event) error {
 	return nil
 }
 
-func (events *EventStore) CountEvents(nostr.Filter) (uint32, error) {
-	return 0, errors.New("COUNT is not supported")
+func (events *EventStore) CountEvents(filter nostr.Filter) (uint32, error) {
+	// Build a count query based on the select query but with COUNT(*) instead
+	qb := events.buildSelectQuery(filter, 0)
+
+	// Convert the select query to a count query
+	countQb := squirrel.Select("COUNT(*)").FromSelect(qb, "subquery")
+
+	var count uint32
+	err := countQb.RunWith(GetDb()).QueryRow().Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count events: %w", err)
+	}
+
+	return count, nil
 }
