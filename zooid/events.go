@@ -13,6 +13,7 @@ import (
 )
 
 type EventStore struct {
+	Config       *Config
 	Schema       *Schema
 	FTSAvailable bool
 }

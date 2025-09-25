@@ -60,6 +60,7 @@ Defines roles that can be assigned to different users and attendant privileges. 
 
 - `pubkeys` - a list of nostr pubkeys this role is assigned to.
 - `can_invite` - a boolean indicating whether this role can invite new members to the relay by requesting a `kind 28935` claim. Defaults to `false`. See [access requests](https://github.com/nostr-protocol/nips/pull/1079) for more details.
+- `can_manage` - a boolean indicating whether this role can use NIP 86 relay management and administer NIP 29 groups. Defaults to `false`.
 
 A special `[roles.member]` heading may be used to configure policies for all relay users (that is, pubkeys assigned to other roles, or who have redeemed an invite code).
 
@@ -89,6 +90,7 @@ can_invite = true
 
 [roles.admin]
 pubkeys = ["d9254d9898fd4728f7e2b32b87520221a50f6b8b97d935d7da2de8923988aa6d"]
+can_manage = true
 ```
 
 ## Development

@@ -5,7 +5,6 @@ import (
 	"iter"
 	"log"
 	"net/http"
-	"os"
 	"sync"
 
 	"fiatjaf.com/nostr"
@@ -17,7 +16,9 @@ import (
 type Instance struct {
 	Host   string
 	Config *Config
+	Secret nostr.SecretKey
 	Events eventstore.Store
+	Access *AccessStore
 	Relay  *khatru.Relay
 }
 
@@ -32,15 +33,23 @@ func MakeInstance(hostname string) (*Instance, error) {
 		return nil, err
 	}
 
-	// secret, err := nostr.SecretKeyFromHex(config.Self.Secret)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	secret, err := nostr.SecretKeyFromHex(config.Self.Secret)
+	if err != nil {
+		return nil, err
+	}
 
 	instance := &Instance{
 		Host:   hostname,
 		Config: config,
+		Secret: secret,
 		Events: &EventStore{
+			Config: config,
+			Schema: &Schema{
+				Name: slug.Make(config.Self.Schema) + "__events",
+			},
+		},
+		Access: &AccessStore{
+			Config: config,
 			Schema: &Schema{
 				Name: slug.Make(config.Self.Schema) + "__events",
 			},
@@ -84,12 +93,12 @@ func MakeInstance(hostname string) (*Instance, error) {
 
 	// Initialize stuff
 
-	if err := os.MkdirAll(instance.Config.Data.Events, 0755); err != nil {
-		log.Fatal("Failed to create event store path:", err)
-	}
-
 	if err := instance.Events.Init(); err != nil {
 		log.Fatal("Failed to initialize event store:", err)
+	}
+
+	if err := instance.Access.Init(); err != nil {
+		log.Fatal("Failed to initialize access store:", err)
 	}
 
 	return instance, nil
@@ -121,16 +130,57 @@ func GetInstance(hostname string) (*Instance, error) {
 
 // Utility methods
 
-func (instance *Instance) IsMember(pubkey nostr.PubKey) bool {
-	pubkeyStr := pubkey.String()
-	for _, role := range instance.Config.Roles {
-		for _, pk := range role.Pubkeys {
-			if pk == pubkeyStr {
-				return true
-			}
-		}
+func (instance *Instance) HasAccess(pubkey nostr.PubKey) bool {
+	if instance.Config.IsOwner(pubkey) {
+		return true
 	}
+
+	if instance.Config.IsSelf(pubkey) {
+		return true
+	}
+
+	roles := instance.Config.GetRolesForPubkey(pubkey)
+
+	if instance.Config.CanManage(roles) {
+		return true
+	}
+
+	if len(instance.Access.GetRedemptionsByPubkey(pubkey)) > 0 {
+		return true
+	}
+
 	return false
+}
+
+func (instance *Instance) GenerateInviteEvents(ctx context.Context, filter nostr.Filter) []*nostr.Event {
+	pubkey, ok := khatru.GetAuthed(ctx)
+
+	if !ok {
+		return []*nostr.Event{}
+	}
+
+	var claim string
+
+	invites := instance.Access.GetInvitesByPubkey(pubkey)
+
+	if len(invites) > 0 {
+		claim = First(invites).Claim
+	} else {
+		claim = RandomString(8)
+		instance.Access.AddInvite(pubkey, claim)
+	}
+
+	event := nostr.Event{
+		Kind:      AUTH_INVITE,
+		CreatedAt: nostr.Now(),
+		Tags: nostr.Tags{
+			nostr.Tag{"claim", claim},
+		},
+	}
+
+	event.Sign(instance.Secret)
+
+	return []*nostr.Event{&event}
 }
 
 // Handlers

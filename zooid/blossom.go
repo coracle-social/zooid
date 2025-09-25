@@ -15,14 +15,15 @@ import (
 
 func EnableBlossom(instance *Instance) {
 	fs := afero.NewOsFs()
+	dir := Env("DATA") + "/media"
 
-	if err := fs.MkdirAll(Env("DATA"), 0755); err != nil {
+	if err := fs.MkdirAll(dir, 0755); err != nil {
 		log.Fatal("🚫 error creating blossom path:", err)
 	}
 
 	store := &EventStore{
 		Schema: &Schema{
-			Name: slug.Make(config.Self.Schema) + "__blossom",
+			Name: slug.Make(instance.Config.Self.Schema) + "__blossom",
 		},
 	}
 
@@ -34,7 +35,7 @@ func EnableBlossom(instance *Instance) {
 	}
 
 	backend.StoreBlob = func(ctx context.Context, sha256 string, ext string, body []byte) error {
-		file, err := fs.Create(instance.Config.Blossom.Directory + "/" + sha256)
+		file, err := fs.Create(dir + "/" + sha256)
 		if err != nil {
 			return err
 		}
@@ -47,7 +48,7 @@ func EnableBlossom(instance *Instance) {
 	}
 
 	backend.LoadBlob = func(ctx context.Context, sha256 string, ext string) (io.ReadSeeker, *url.URL, error) {
-		file, err := fs.Open(instance.Config.Blossom.Directory + "/" + sha256)
+		file, err := fs.Open(dir + "/" + sha256)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -55,7 +56,7 @@ func EnableBlossom(instance *Instance) {
 	}
 
 	backend.DeleteBlob = func(ctx context.Context, sha256 string, ext string) error {
-		return fs.Remove(instance.Config.Blossom.Directory + "/" + sha256)
+		return fs.Remove(dir + "/" + sha256)
 	}
 
 	backend.RejectUpload = func(ctx context.Context, auth *nostr.Event, size int, ext string) (bool, string, int) {
@@ -63,7 +64,7 @@ func EnableBlossom(instance *Instance) {
 			return true, "file too large", 413
 		}
 
-		if auth == nil || !instance.IsMember(auth.PubKey) {
+		if auth == nil || !instance.HasAccess(auth.PubKey) {
 			return true, "unauthorized", 403
 		}
 
@@ -71,7 +72,7 @@ func EnableBlossom(instance *Instance) {
 	}
 
 	backend.RejectGet = func(ctx context.Context, auth *nostr.Event, sha256 string, ext string) (bool, string, int) {
-		if auth == nil || !instance.IsMember(auth.PubKey) {
+		if auth == nil || !instance.HasAccess(auth.PubKey) {
 			return true, "unauthorized", 403
 		}
 
@@ -79,7 +80,7 @@ func EnableBlossom(instance *Instance) {
 	}
 
 	backend.RejectList = func(ctx context.Context, auth *nostr.Event, pubkey nostr.PubKey) (bool, string, int) {
-		if auth == nil || !instance.IsMember(auth.PubKey) {
+		if auth == nil || !instance.HasAccess(auth.PubKey) {
 			return true, "unauthorized", 403
 		}
 
@@ -87,7 +88,7 @@ func EnableBlossom(instance *Instance) {
 	}
 
 	backend.RejectDelete = func(ctx context.Context, auth *nostr.Event, sha256 string, ext string) (bool, string, int) {
-		if auth == nil || !instance.IsMember(auth.PubKey) {
+		if auth == nil || !instance.HasAccess(auth.PubKey) {
 			return true, "unauthorized", 403
 		}
 
