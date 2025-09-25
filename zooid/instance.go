@@ -12,7 +12,6 @@ import (
 	"fiatjaf.com/nostr/eventstore"
 	"fiatjaf.com/nostr/khatru"
 	"github.com/gosimple/slug"
-	"zooid/sqlite"
 )
 
 type Instance struct {
@@ -41,9 +40,10 @@ func MakeInstance(hostname string) (*Instance, error) {
 	instance := &Instance{
 		Host:   hostname,
 		Config: config,
-		Events: &sqlite.SqliteBackend{
-			Path:   Env("DATABASE_PATH", "./data.db"),
-			Prefix: slug.Make(hostname) + "__",
+		Events: &EventStore{
+			Schema: &Schema{
+				Name: slug.Make(hostname),
+			},
 		},
 		Relay: khatru.NewRelay(),
 	}

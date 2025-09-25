@@ -8,10 +8,10 @@ A single zooid instance can run any number of "virtual" relays. The `config` dir
 
 ## Environment
 
-Zooid supports a few environment variables, which configure shared resources, like the web server or sqlite database file.
+Zooid supports a few environment variables, which configure shared resources like the web server or sqlite database.
 
 - `PORT` - the port the server will listen on for all requests. Defaults to `3334`.
-- `DATABASE_PATH` - the location of the database path. Defaults to `./data.db`
+- `DATA` - the location of the directory for storing database files and media. Defaults to `./data`.
 
 ## Configuration
 
@@ -52,7 +52,6 @@ Configures NIP 86 support.
 Configures blossom support.
 
 - `enabled` - whether blossom is enabled.
-- `directory` - where to store files. Defaults to `./data/{my-relay}/media`.
 
 ### `[roles]`
 
@@ -88,11 +87,16 @@ can_invite = true
 
 [roles.admin]
 pubkeys = ["d9254d9898fd4728f7e2b32b87520221a50f6b8b97d935d7da2de8923988aa6d"]
-
-[data]
-events = "./data/my-relay/events"
 ```
 
 ## Development
 
 See `justfile` for defined commands.
+
+## TODO
+
+- [ ] Create a "schema" abstraction to namespace tables
+  - This resource should be passed to event stores as well as claims, redemptions, etc
+  - We might need to create a custom blossom backend since the prefixes for the two stores will collide
+- [ ] Watch configuration files and hot reload
+- [ ] Free up resources after instance inactivity

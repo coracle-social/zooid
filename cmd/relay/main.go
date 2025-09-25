@@ -18,7 +18,7 @@ func main() {
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
 
-	port := zooid.Env("PORT", "3334")
+	port := zooid.Env("PORT")
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%s", port),
 		Handler: http.HandlerFunc(zooid.ServeHTTP),

@@ -9,24 +9,29 @@ import (
 
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/khatru/blossom"
+	"github.com/gosimple/slug"
 	"github.com/spf13/afero"
-	"zooid/sqlite"
 )
 
 func EnableBlossom(instance *Instance) {
 	fs := afero.NewOsFs()
 
-	if err := fs.MkdirAll(instance.Config.Blossom.Directory, 0755); err != nil {
+	if err := fs.MkdirAll(Env("DATA"), 0755); err != nil {
 		log.Fatal("🚫 error creating blossom path:", err)
 	}
 
-	store := &sqlite.SqliteBackend{
-		Path: instance.Config.Data.Blossom,
+	store := &EventStore{
+		Schema: &Schema{
+			Name: slug.Make(instance.Host) + "_blossom__",
+		},
 	}
 
 	backend := blossom.New(instance.Relay, "https://"+instance.Host)
 
-	backend.Store = blossom.EventStoreBlobIndexWrapper{Store: store, ServiceURL: "https://" + instance.Host}
+	backend.Store = blossom.EventStoreBlobIndexWrapper{
+		Store:      store,
+		ServiceURL: "https://" + instance.Host,
+	}
 
 	backend.StoreBlob = func(ctx context.Context, sha256 string, ext string, body []byte) error {
 		file, err := fs.Create(instance.Config.Blossom.Directory + "/" + sha256)

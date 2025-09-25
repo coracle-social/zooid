@@ -20,6 +20,9 @@ func Env(k string, fallback ...string) (v string) {
 	envOnce.Do(func() {
 		env = make(map[string]string)
 
+		env["PORT"] = "3334"
+		env["DATA"] = "./data"
+
 		for _, item := range os.Environ() {
 			parts := strings.SplitN(item, "=", 2)
 			env[parts[0]] = parts[1]
