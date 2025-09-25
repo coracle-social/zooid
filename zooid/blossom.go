@@ -4,33 +4,45 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"log"
+	"os"
 	"net/url"
 
 	"fiatjaf.com/nostr"
+	"fiatjaf.com/nostr/eventstore"
 	"fiatjaf.com/nostr/khatru/blossom"
-	"github.com/gosimple/slug"
 	"github.com/spf13/afero"
 )
 
-func EnableBlossom(instance *Instance) {
-	fs := afero.NewOsFs()
+type BlossomStore struct {
+  Config *Config
+  Schema *Schema
+  Store eventstore.Store
+}
+
+func (bl *BlossomStore) Init() error {
 	dir := Env("DATA") + "/media"
 
-	if err := fs.MkdirAll(dir, 0755); err != nil {
-		log.Fatal("🚫 error creating blossom path:", err)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
 	}
 
-	store := &EventStore{
-		Schema: &Schema{
-			Name: slug.Make(instance.Config.Self.Schema) + "__blossom",
-		},
+  // Blossom uses a wrapped event store for metadata
+	bl.Store = &EventStore{Schema: bl.Schema}
+
+	if err := bl.Store.Init(); err != nil {
+    return err
 	}
 
+	return nil
+}
+
+func (bl *BlossomStore) Enable(instance *Instance) {
+	fs := afero.NewOsFs()
+	dir := Env("DATA") + "/media"
 	backend := blossom.New(instance.Relay, "https://"+instance.Host)
 
 	backend.Store = blossom.EventStoreBlobIndexWrapper{
-		Store:      store,
+		Store:      bl.Store,
 		ServiceURL: "https://" + instance.Host,
 	}
 
@@ -93,8 +105,5 @@ func EnableBlossom(instance *Instance) {
 		}
 
 		return false, "", 200
-	}
-	if err := store.Init(); err != nil {
-		panic(err)
 	}
 }

@@ -19,6 +19,7 @@ type Instance struct {
 	Secret     nostr.SecretKey
 	Events     eventstore.Store
 	Access     *AccessStore
+	Blossom    *BlossomStore
 	Management *ManagementStore
 	Relay      *khatru.Relay
 }
@@ -53,6 +54,12 @@ func MakeInstance(hostname string) (*Instance, error) {
 			Config: config,
 			Schema: &Schema{
 				Name: slug.Make(config.Self.Schema) + "__access",
+			},
+		},
+		Blossom: &BlossomStore{
+			Config: config,
+			Schema: &Schema{
+				Name: slug.Make(config.Self.Schema) + "__blossom",
 			},
 		},
 		Management: &ManagementStore{
@@ -96,6 +103,10 @@ func MakeInstance(hostname string) (*Instance, error) {
 		log.Fatal("Failed to initialize access store:", err)
 	}
 
+	if err := instance.Blossom.Init(); err != nil {
+		log.Fatal("Failed to initialize blossom store:", err)
+	}
+
 	if err := instance.Management.Init(); err != nil {
 		log.Fatal("Failed to initialize management store:", err)
 	}
@@ -105,7 +116,7 @@ func MakeInstance(hostname string) (*Instance, error) {
 	}
 
 	if config.Blossom.Enabled {
-		EnableBlossom(instance)
+		instance.Blossom.Enable(instance)
 	}
 
 	if config.Management.Enabled {
