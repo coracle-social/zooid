@@ -14,12 +14,13 @@ import (
 )
 
 type Instance struct {
-	Host   string
-	Config *Config
-	Secret nostr.SecretKey
-	Events eventstore.Store
-	Access *AccessStore
-	Relay  *khatru.Relay
+	Host       string
+	Config     *Config
+	Secret     nostr.SecretKey
+	Events     eventstore.Store
+	Access     *AccessStore
+	Management *ManagementStore
+	Relay      *khatru.Relay
 }
 
 func MakeInstance(hostname string) (*Instance, error) {
@@ -51,7 +52,13 @@ func MakeInstance(hostname string) (*Instance, error) {
 		Access: &AccessStore{
 			Config: config,
 			Schema: &Schema{
-				Name: slug.Make(config.Self.Schema) + "__events",
+				Name: slug.Make(config.Self.Schema) + "__access",
+			},
+		},
+		Management: &ManagementStore{
+			Config: config,
+			Schema: &Schema{
+				Name: slug.Make(config.Self.Schema) + "__management",
 			},
 		},
 		Relay: khatru.NewRelay(),
@@ -79,6 +86,20 @@ func MakeInstance(hostname string) (*Instance, error) {
 	instance.Relay.RejectConnection = instance.RejectConnection
 	instance.Relay.PreventBroadcast = instance.PreventBroadcast
 
+	// Initialize stuff
+
+	if err := instance.Events.Init(); err != nil {
+		log.Fatal("Failed to initialize event store:", err)
+	}
+
+	if err := instance.Access.Init(); err != nil {
+		log.Fatal("Failed to initialize access store:", err)
+	}
+
+	if err := instance.Management.Init(); err != nil {
+		log.Fatal("Failed to initialize management store:", err)
+	}
+
 	if config.Groups.Enabled {
 		EnableGroups(instance)
 	}
@@ -88,17 +109,7 @@ func MakeInstance(hostname string) (*Instance, error) {
 	}
 
 	if config.Management.Enabled {
-		EnableManagement(instance)
-	}
-
-	// Initialize stuff
-
-	if err := instance.Events.Init(); err != nil {
-		log.Fatal("Failed to initialize event store:", err)
-	}
-
-	if err := instance.Access.Init(); err != nil {
-		log.Fatal("Failed to initialize access store:", err)
+		instance.Management.Enable(instance)
 	}
 
 	return instance, nil
