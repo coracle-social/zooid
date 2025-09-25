@@ -42,7 +42,7 @@ func MakeInstance(hostname string) (*Instance, error) {
 		Config: config,
 		Events: &EventStore{
 			Schema: &Schema{
-				Name: slug.Make(hostname),
+				Name: slug.Make(config.Self.Schema) + "__events",
 			},
 		},
 		Relay: khatru.NewRelay(),

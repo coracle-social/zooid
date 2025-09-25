@@ -22,7 +22,7 @@ func EnableBlossom(instance *Instance) {
 
 	store := &EventStore{
 		Schema: &Schema{
-			Name: slug.Make(instance.Host) + "_blossom__",
+			Name: slug.Make(config.Self.Schema) + "__blossom",
 		},
 	}
 

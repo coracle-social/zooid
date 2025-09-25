@@ -23,6 +23,7 @@ Contains information for populating the relay's `nip11` document.
 
 Required:
 
+- `schema` - a string that identifies this relay. This cannot be changed, and must be usable as a sqlite identifier.
 - `secret` - the nostr secret key of the relay. Will be used to populate the relay's NIP 11 `self` field and sign generated events.
 
 Optional:
@@ -69,6 +70,7 @@ The below config file might be saved as `./config/my-relay.example.com` in order
 ```toml
 [self]
 name = "My relay"
+schema = 'my_relay'
 secret = "ce30b1831a4551f4cb7a984033c34ab96d8cf56ff50df9d0c27d9fa5422f2278"
 
 [groups]
@@ -95,8 +97,5 @@ See `justfile` for defined commands.
 
 ## TODO
 
-- [ ] Create a "schema" abstraction to namespace tables
-  - This resource should be passed to event stores as well as claims, redemptions, etc
-  - We might need to create a custom blossom backend since the prefixes for the two stores will collide
 - [ ] Watch configuration files and hot reload
 - [ ] Free up resources after instance inactivity
