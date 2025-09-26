@@ -100,9 +100,9 @@ func (events *EventStore) QueryEvents(filter nostr.Filter, maxLimit int) iter.Se
 			return
 		}
 
-    if maxLimit > 0 && maxLimit < filter.Limit {
-      filter.Limit = maxLimit
-    }
+		if maxLimit > 0 && maxLimit < filter.Limit {
+			filter.Limit = maxLimit
+		}
 
 		rows, err := events.buildSelectQuery(filter).RunWith(GetDb()).Query()
 		if err != nil {
@@ -205,9 +205,13 @@ func (events *EventStore) buildSelectQuery(filter nostr.Filter) squirrel.SelectB
 	}
 
 	for tagKey, tagValues := range filter.Tags {
-  	if len(tagValues) == 0 {
-    	continue
-  	}
+		if len(tagValues) == 0 {
+			continue
+		}
+
+		if len(tagKey) != 1 {
+			continue
+		}
 
 		tagValueInterfaces := make([]interface{}, len(tagValues))
 		for i, tagValue := range tagValues {

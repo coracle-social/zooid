@@ -1,9 +1,9 @@
 package zooid
 
 import (
+	"fiatjaf.com/nostr"
 	"math/rand"
 	"strings"
-	"fiatjaf.com/nostr"
 )
 
 const (
@@ -71,7 +71,7 @@ func HasTag(tags nostr.Tags, key string) bool {
 }
 
 func IsEmptyEvent(event nostr.Event) bool {
-  var zeroID nostr.ID
+	var zeroID nostr.ID
 
-  return event.ID == zeroID
+	return event.ID == zeroID
 }

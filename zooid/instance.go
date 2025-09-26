@@ -2,16 +2,16 @@ package zooid
 
 import (
 	"context"
-	"slices"
 	"iter"
 	"log"
 	"net/http"
+	"slices"
 	"sync"
 
 	"fiatjaf.com/nostr"
-	"fiatjaf.com/nostr/nip29"
 	"fiatjaf.com/nostr/eventstore"
 	"fiatjaf.com/nostr/khatru"
+	"fiatjaf.com/nostr/nip29"
 	"github.com/gosimple/slug"
 )
 
@@ -20,7 +20,6 @@ type Instance struct {
 	Config     *Config
 	Secret     nostr.SecretKey
 	Events     eventstore.Store
-	Access     *AccessStore
 	Blossom    *BlossomStore
 	Management *ManagementStore
 	Relay      *khatru.Relay
@@ -50,12 +49,6 @@ func MakeInstance(hostname string) (*Instance, error) {
 			Config: config,
 			Schema: &Schema{
 				Name: slug.Make(config.Self.Schema) + "_events",
-			},
-		},
-		Access: &AccessStore{
-			Config: config,
-			Schema: &Schema{
-				Name: slug.Make(config.Self.Schema) + "_access",
 			},
 		},
 		Blossom: &BlossomStore{
@@ -99,10 +92,6 @@ func MakeInstance(hostname string) (*Instance, error) {
 
 	if err := instance.Events.Init(); err != nil {
 		log.Fatal("Failed to initialize event store:", err)
-	}
-
-	if err := instance.Access.Init(); err != nil {
-		log.Fatal("Failed to initialize access store:", err)
 	}
 
 	if err := instance.Blossom.Init(); err != nil {
@@ -171,7 +160,12 @@ func (instance *Instance) HasAccess(pubkey nostr.PubKey) bool {
 		return true
 	}
 
-	if len(instance.Access.GetRedemptionsByPubkey(pubkey)) > 0 {
+	filter := nostr.Filter{
+		Kinds:   []nostr.Kind{AUTH_JOIN},
+		Authors: []nostr.PubKey{pubkey},
+	}
+
+	for range instance.Events.QueryEvents(filter, 1) {
 		return true
 	}
 
@@ -210,7 +204,7 @@ func (instance *Instance) AllowRecipientEvent(event nostr.Event) bool {
 		recipientTag := event.Tags.Find("p")
 
 		if recipientTag != nil {
-  		pubkey, err := nostr.PubKeyFromHex(recipientTag[1])
+			pubkey, err := nostr.PubKeyFromHex(recipientTag[1])
 
 			if err == nil && instance.HasAccess(pubkey) {
 				return true
@@ -219,6 +213,35 @@ func (instance *Instance) AllowRecipientEvent(event nostr.Event) bool {
 	}
 
 	return false
+}
+
+func (instance *Instance) GenerateInviteEvent(pubkey nostr.PubKey) nostr.Event {
+	filter := nostr.Filter{
+		Kinds:   []nostr.Kind{AUTH_INVITE},
+		Authors: []nostr.PubKey{pubkey},
+	}
+
+	for event := range instance.Events.QueryEvents(filter, 1) {
+		return event
+	}
+
+	event := nostr.Event{
+		Kind:      AUTH_INVITE,
+		CreatedAt: nostr.Now(),
+		Tags: nostr.Tags{
+			[]string{"claim", RandomString(8)},
+			[]string{"p", pubkey.Hex()},
+		},
+	}
+
+	event.Sign(instance.Secret)
+
+	err := instance.Events.SaveEvent(event)
+	if err != nil {
+		log.Printf("Failed to generate invite event: %w", err)
+	}
+
+	return event
 }
 
 func (instance *Instance) OnJoinEvent(event nostr.Event) (reject bool, msg string) {
@@ -230,22 +253,21 @@ func (instance *Instance) OnJoinEvent(event nostr.Event) (reject bool, msg strin
 
 	filter := nostr.Filter{
 		Kinds: []nostr.Kind{AUTH_INVITE},
-		Tags: nostr.TagMap{
-  		"claim": []string{claimTag[1]},
-		},
 	}
 
-	for range instance.Events.QueryEvents(filter, 1) {
-  	return false, ""
+	for event := range instance.Events.QueryEvents(filter, 0) {
+		if event.Tags.FindWithValue("claim", claimTag[1]) != nil {
+			return false, ""
+		}
 	}
 
 	return true, "invalid: failed to validate invite code"
 }
 
 func (instance *Instance) GetGroupMetadataEvent(h string) nostr.Event {
-  for event := range instance.Events.QueryEvents(MakeGroupMetadataFilter(h), 1) {
-    return event
-  }
+	for event := range instance.Events.QueryEvents(MakeGroupMetadataFilter(h), 1) {
+		return event
+	}
 
 	return nostr.Event{}
 }
@@ -358,12 +380,12 @@ func (instance *Instance) OnEventSaved(ctx context.Context, event nostr.Event) {
 	}
 
 	if event.Kind == nostr.KindSimpleGroupJoinRequest && instance.Config.Groups.AutoJoin {
-  	h := GetGroupIDFromEvent(event)
-  	meta := instance.GetGroupMetadataEvent(h)
+		h := GetGroupIDFromEvent(event)
+		meta := instance.GetGroupMetadataEvent(h)
 
-    if !HasTag(meta.Tags, "closed") {
-  		addEvent(MakePutUserEvent(h, event.PubKey))
-    }
+		if !HasTag(meta.Tags, "closed") {
+			addEvent(MakePutUserEvent(h, event.PubKey))
+		}
 	}
 
 	if event.Kind == nostr.KindSimpleGroupLeaveRequest && instance.Config.Groups.AutoLeave {
@@ -388,6 +410,9 @@ func (instance *Instance) OnEventSaved(ctx context.Context, event nostr.Event) {
 }
 
 func (instance *Instance) OnEphemeralEvent(ctx context.Context, event nostr.Event) {
+	if slices.Contains([]nostr.Kind{AUTH_INVITE, AUTH_JOIN}, event.Kind) {
+		instance.Events.SaveEvent(event)
+	}
 }
 
 func (instance *Instance) OnRequest(ctx context.Context, filter nostr.Filter) (reject bool, msg string) {
@@ -414,7 +439,7 @@ func (instance *Instance) QueryStored(ctx context.Context, filter nostr.Filter) 
 
 		stripSignature := func(event nostr.Event) nostr.Event {
 			if instance.Config.Policy.StripSignatures && !instance.IsAdmin(pubkey) {
-  			var zeroSig [64]byte
+				var zeroSig [64]byte
 				event.Sig = zeroSig
 			}
 
@@ -422,52 +447,30 @@ func (instance *Instance) QueryStored(ctx context.Context, filter nostr.Filter) 
 		}
 
 		if slices.Contains(filter.Kinds, AUTH_INVITE) && instance.Config.CanInvite(pubkey) {
-			var claim string
-
-			invites := instance.Access.GetInvitesByPubkey(pubkey)
-
-			if len(invites) > 0 {
-				claim = First(invites).Claim
-			} else {
-				claim = RandomString(8)
-				instance.Access.AddInvite(pubkey, claim)
-			}
-
-			event := nostr.Event{
-				Kind:      AUTH_INVITE,
-				CreatedAt: nostr.Now(),
-				Tags: nostr.Tags{
-					nostr.Tag{"claim", claim},
-				},
-			}
-
-			event.Sign(instance.Secret)
-
-			if !yield(stripSignature(event)) {
+			if !yield(stripSignature(instance.GenerateInviteEvent(pubkey))) {
 				return
 			}
 		}
 
 		for event := range instance.Events.QueryEvents(filter, 1000) {
-			hTag := event.Tags.Find("h")
+			// We save some ephemeral events for bookkeeping, don't return them
+			if event.Kind.IsEphemeral() {
+				continue
+			}
 
-			// Prune group related events if groups are disabled
-			if !instance.Config.Groups.Enabled {
-				if slices.Contains(nip29.ModerationEventKinds, event.Kind) {
+			h := GetGroupIDFromEvent(event)
+
+			if h != "" {
+				if !instance.Config.Groups.Enabled {
 					continue
 				}
 
-				if slices.Contains(nip29.MetadataEventKinds, event.Kind) {
-					continue
-				}
-
-				if hTag != nil {
+				if !instance.HasGroupAccess(h, pubkey) {
 					continue
 				}
 			}
 
-			// Prune events that the user doesn't have access to
-			if hTag != nil && !instance.HasGroupAccess(hTag[1], pubkey) {
+			if !instance.Config.Groups.Enabled && slices.Contains(nip29.MetadataEventKinds, event.Kind) {
 				continue
 			}
 
