@@ -184,7 +184,7 @@ func (m *ManagementStore) Enable(instance *Instance) {
 	instance.Relay.ManagementAPI.OnAPICall = func(ctx context.Context, mp nip86.MethodParams) (reject bool, msg string) {
 		pubkey, ok := khatru.GetAuthed(ctx)
 
-		if ok && m.Config.CanManage(m.Config.GetRolesForPubkey(pubkey)) {
+		if ok && m.Config.CanManage(pubkey) {
 			return true, "blocked: only relay admins can manage this relay."
 		}
 
@@ -196,7 +196,7 @@ func (m *ManagementStore) Enable(instance *Instance) {
 			Authors: []nostr.PubKey{pubkey},
 		}
 
-		for event := range instance.Events.QueryEvents(filter, 1000000) {
+		for event := range instance.Events.QueryEvents(filter, 0) {
 			instance.Events.DeleteEvent(event.ID)
 		}
 
@@ -229,7 +229,7 @@ func (m *ManagementStore) Enable(instance *Instance) {
 			IDs: []nostr.ID{id},
 		}
 
-		for event := range instance.Events.QueryEvents(filter, 1000000) {
+		for event := range instance.Events.QueryEvents(filter, 0) {
 			instance.Events.DeleteEvent(event.ID)
 		}
 

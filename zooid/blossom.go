@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"os"
 	"net/url"
+	"os"
 
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/eventstore"
@@ -14,9 +14,9 @@ import (
 )
 
 type BlossomStore struct {
-  Config *Config
-  Schema *Schema
-  Store eventstore.Store
+	Config *Config
+	Schema *Schema
+	Store  eventstore.Store
 }
 
 func (bl *BlossomStore) Init() error {
@@ -26,11 +26,11 @@ func (bl *BlossomStore) Init() error {
 		return err
 	}
 
-  // Blossom uses a wrapped event store for metadata
+	// Blossom uses a wrapped event store for metadata
 	bl.Store = &EventStore{Schema: bl.Schema}
 
 	if err := bl.Store.Init(); err != nil {
-    return err
+		return err
 	}
 
 	return nil

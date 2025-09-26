@@ -33,6 +33,12 @@ Optional:
 - `pubkey` - the public key of the relay owner. Does not affect access controls.
 - `description` - your relay's description.
 
+### `[policy]`
+
+Contains policy and access related configuration.
+
+- `strip_signatures` - whether to remove signatures when serving events. This requires clients/users to trust the relay to properly authenticate signatures. Be cautious about using this; a malicious relay will be able to execute all kinds of attacks, including potentially serving events unrelated to a community use case.
+
 ### `[groups]`
 
 Configures NIP 29 support.
@@ -74,6 +80,9 @@ name = "My relay"
 schema = 'my_relay'
 secret = "ce30b1831a4551f4cb7a984033c34ab96d8cf56ff50df9d0c27d9fa5422f2278"
 
+[policy]
+strip_signatures = false
+
 [groups]
 enabled = true
 auto_join = false
@@ -100,6 +109,8 @@ See `justfile` for defined commands.
 ## TODO
 
 - [ ] See if we can build groups directly on top of the event store by generating events eagerly rather than lazily
+- [ ] See if we can implement invites/redemptions directly on top of the event store by storing generated claims and redemptions. Avoid serving these to other people.
 - [ ] Add admin/owner/etc to list allowed pubkeys
 - [ ] Watch configuration files and hot reload
 - [ ] Free up resources after instance inactivity
+- [ ] Admins/members

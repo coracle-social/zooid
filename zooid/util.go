@@ -3,6 +3,7 @@ package zooid
 import (
 	"math/rand"
 	"strings"
+	"fiatjaf.com/nostr"
 )
 
 const (
@@ -58,4 +59,19 @@ func Split(s string, delim string) []string {
 	} else {
 		return strings.Split(s, delim)
 	}
+}
+
+func HasTag(tags nostr.Tags, key string) bool {
+	for _, v := range tags {
+		if len(v) >= 1 && v[0] == key {
+			return true
+		}
+	}
+	return false
+}
+
+func IsEmptyEvent(event nostr.Event) bool {
+  var zeroID nostr.ID
+
+  return event.ID == zeroID
 }

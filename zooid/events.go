@@ -100,12 +100,11 @@ func (events *EventStore) QueryEvents(filter nostr.Filter, maxLimit int) iter.Se
 			return
 		}
 
-		limit := maxLimit
-		if filter.Limit > 0 && filter.Limit < limit {
-			limit = filter.Limit
-		}
+    if maxLimit > 0 && maxLimit < filter.Limit {
+      filter.Limit = maxLimit
+    }
 
-		rows, err := events.buildSelectQuery(filter, limit).RunWith(GetDb()).Query()
+		rows, err := events.buildSelectQuery(filter).RunWith(GetDb()).Query()
 		if err != nil {
 			return
 		}
@@ -159,7 +158,7 @@ func (events *EventStore) QueryEvents(filter nostr.Filter, maxLimit int) iter.Se
 	}
 }
 
-func (events *EventStore) buildSelectQuery(filter nostr.Filter, limit int) squirrel.SelectBuilder {
+func (events *EventStore) buildSelectQuery(filter nostr.Filter) squirrel.SelectBuilder {
 	qb := squirrel.Select("id", "created_at", "kind", "pubkey", "content", "tags", "sig").
 		From(events.Schema.Prefix("events")).
 		OrderBy("created_at DESC")
@@ -206,25 +205,26 @@ func (events *EventStore) buildSelectQuery(filter nostr.Filter, limit int) squir
 	}
 
 	for tagKey, tagValues := range filter.Tags {
-		if len(tagValues) > 0 && len(tagKey) == 1 {
-			tagValueInterfaces := make([]interface{}, len(tagValues))
-			for i, tagValue := range tagValues {
-				tagValueInterfaces[i] = tagValue
-			}
+  	if len(tagValues) == 0 {
+    	continue
+  	}
 
-			subQuery := squirrel.Select("event_id").
-				From(events.Schema.Prefix("event_tags")).
-				Where(squirrel.Eq{"key": tagKey}).
-				Where(squirrel.Eq{"value": tagValueInterfaces})
-
-			subQuerySql, subQueryArgs, _ := subQuery.ToSql()
-			qb = qb.Where("id IN ("+subQuerySql+")", subQueryArgs...)
+		tagValueInterfaces := make([]interface{}, len(tagValues))
+		for i, tagValue := range tagValues {
+			tagValueInterfaces[i] = tagValue
 		}
+
+		subQuery := squirrel.Select("event_id").
+			From(events.Schema.Prefix("event_tags")).
+			Where(squirrel.Eq{"key": tagKey}).
+			Where(squirrel.Eq{"value": tagValueInterfaces})
+
+		subQuerySql, subQueryArgs, _ := subQuery.ToSql()
+		qb = qb.Where("id IN ("+subQuerySql+")", subQueryArgs...)
 	}
 
-	// Add limit
-	if limit > 0 {
-		qb = qb.Limit(uint64(limit))
+	if filter.Limit > 0 {
+		qb = qb.Limit(uint64(filter.Limit))
 	}
 
 	return qb
@@ -316,7 +316,7 @@ func (events *EventStore) ReplaceEvent(evt nostr.Event) error {
 
 func (events *EventStore) CountEvents(filter nostr.Filter) (uint32, error) {
 	// Build a count query based on the select query but with COUNT(*) instead
-	qb := events.buildSelectQuery(filter, 0)
+	qb := events.buildSelectQuery(filter)
 
 	// Convert the select query to a count query
 	countQb := squirrel.Select("COUNT(*)").FromSelect(qb, "subquery")

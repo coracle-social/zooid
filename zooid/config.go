@@ -15,7 +15,7 @@ type Role struct {
 }
 
 type Config struct {
-  Host string
+	Host string
 	Self struct {
 		Name        string `toml:"name"`
 		Icon        string `toml:"icon"`
@@ -24,6 +24,10 @@ type Config struct {
 		Pubkey      string `toml:"pubkey"`
 		Description string `toml:"description"`
 	} `toml:"self"`
+
+	Policy struct {
+		StripSignatures bool `toml:"strip_signatures"`
+	} `toml:"policy"`
 
 	Groups struct {
 		Enabled   bool `toml:"enabled"`
@@ -79,9 +83,19 @@ func (config *Config) GetRolesForPubkey(pubkey nostr.PubKey) []Role {
 	return roles
 }
 
-func (config *Config) CanManage(roles []Role) bool {
-	for _, role := range roles {
+func (config *Config) CanManage(pubkey nostr.PubKey) bool {
+	for _, role := range config.GetRolesForPubkey(pubkey) {
 		if role.CanManage {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (config *Config) CanInvite(pubkey nostr.PubKey) bool {
+	for _, role := range config.GetRolesForPubkey(pubkey) {
+		if role.CanInvite {
 			return true
 		}
 	}
