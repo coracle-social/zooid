@@ -15,6 +15,7 @@ type Role struct {
 }
 
 type Config struct {
+  Host string
 	Self struct {
 		Name        string `toml:"name"`
 		Icon        string `toml:"icon"`
@@ -49,6 +50,8 @@ func LoadConfig(hostname string) (*Config, error) {
 	if _, err := toml.DecodeFile(path, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config file %s: %w", path, err)
 	}
+
+	config.Host = hostname
 
 	return &config, nil
 }

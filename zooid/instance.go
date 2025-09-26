@@ -19,6 +19,7 @@ type Instance struct {
 	Secret     nostr.SecretKey
 	Events     eventstore.Store
 	Access     *AccessStore
+	Groups     *GroupsStore
 	Blossom    *BlossomStore
 	Management *ManagementStore
 	Relay      *khatru.Relay
@@ -47,25 +48,31 @@ func MakeInstance(hostname string) (*Instance, error) {
 		Events: &EventStore{
 			Config: config,
 			Schema: &Schema{
-				Name: slug.Make(config.Self.Schema) + "__events",
+				Name: slug.Make(config.Self.Schema) + "_events",
 			},
 		},
 		Access: &AccessStore{
 			Config: config,
 			Schema: &Schema{
-				Name: slug.Make(config.Self.Schema) + "__access",
+				Name: slug.Make(config.Self.Schema) + "_access",
+			},
+		},
+		Groups: &GroupsStore{
+			Config: config,
+			Schema: &Schema{
+				Name: slug.Make(config.Self.Schema) + "_groups",
 			},
 		},
 		Blossom: &BlossomStore{
 			Config: config,
 			Schema: &Schema{
-				Name: slug.Make(config.Self.Schema) + "__blossom",
+				Name: slug.Make(config.Self.Schema) + "_blossom",
 			},
 		},
 		Management: &ManagementStore{
 			Config: config,
 			Schema: &Schema{
-				Name: slug.Make(config.Self.Schema) + "__management",
+				Name: slug.Make(config.Self.Schema) + "_management",
 			},
 		},
 		Relay: khatru.NewRelay(),
@@ -103,6 +110,10 @@ func MakeInstance(hostname string) (*Instance, error) {
 		log.Fatal("Failed to initialize access store:", err)
 	}
 
+	if err := instance.Groups.Init(); err != nil {
+		log.Fatal("Failed to initialize groups store:", err)
+	}
+
 	if err := instance.Blossom.Init(); err != nil {
 		log.Fatal("Failed to initialize blossom store:", err)
 	}
@@ -112,7 +123,7 @@ func MakeInstance(hostname string) (*Instance, error) {
 	}
 
 	if config.Groups.Enabled {
-		EnableGroups(instance)
+		instance.Groups.Enable(instance)
 	}
 
 	if config.Blossom.Enabled {

@@ -178,8 +178,6 @@ func (m *ManagementStore) EventHasStatus(id nostr.ID, status string) bool {
 	return false
 }
 
-// Handlers
-
 // Middleware
 
 func (m *ManagementStore) Enable(instance *Instance) {

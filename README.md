@@ -99,7 +99,7 @@ See `justfile` for defined commands.
 
 ## TODO
 
-- [ ] Sync claims to management db, pull directly from management db when checking access
+- [ ] See if we can build groups directly on top of the event store by generating events eagerly rather than lazily
 - [ ] Add admin/owner/etc to list allowed pubkeys
 - [ ] Watch configuration files and hot reload
 - [ ] Free up resources after instance inactivity
