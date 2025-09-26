@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"slices"
+	"strings"
 	"sync"
 
 	"fiatjaf.com/nostr"
@@ -16,9 +17,7 @@ import (
 )
 
 type Instance struct {
-	Host       string
 	Config     *Config
-	Secret     nostr.SecretKey
 	Events     eventstore.Store
 	Blossom    *BlossomStore
 	Management *ManagementStore
@@ -36,34 +35,29 @@ func MakeInstance(hostname string) (*Instance, error) {
 		return nil, err
 	}
 
-	secret, err := nostr.SecretKeyFromHex(config.Self.Secret)
-	if err != nil {
-		return nil, err
+	events := &EventStore{
+		Config: config,
+		Schema: &Schema{
+			Name: slug.Make(config.Self.Schema),
+		},
+	}
+
+	blossom := &BlossomStore{
+		Config: config,
+		Events: events,
+	}
+
+	management := &ManagementStore{
+		Config: config,
+		Events: events,
 	}
 
 	instance := &Instance{
-		Host:   hostname,
-		Config: config,
-		Secret: secret,
-		Events: &EventStore{
-			Config: config,
-			Schema: &Schema{
-				Name: slug.Make(config.Self.Schema) + "_events",
-			},
-		},
-		Blossom: &BlossomStore{
-			Config: config,
-			Schema: &Schema{
-				Name: slug.Make(config.Self.Schema) + "_blossom",
-			},
-		},
-		Management: &ManagementStore{
-			Config: config,
-			Schema: &Schema{
-				Name: slug.Make(config.Self.Schema) + "_management",
-			},
-		},
-		Relay: khatru.NewRelay(),
+		Config:     config,
+		Events:     events,
+		Blossom:    blossom,
+		Management: management,
+		Relay:      khatru.NewRelay(),
 	}
 
 	instance.Relay.Info.Name = config.Self.Name
@@ -96,10 +90,6 @@ func MakeInstance(hostname string) (*Instance, error) {
 
 	if err := instance.Blossom.Init(); err != nil {
 		log.Fatal("Failed to initialize blossom store:", err)
-	}
-
-	if err := instance.Management.Init(); err != nil {
-		log.Fatal("Failed to initialize management store:", err)
 	}
 
 	if config.Blossom.Enabled {
@@ -139,25 +129,13 @@ func GetInstance(hostname string) (*Instance, error) {
 
 // Utility methods
 
-func (instance *Instance) IsAdmin(pubkey nostr.PubKey) bool {
-	if instance.Config.IsOwner(pubkey) {
-		return true
-	}
-
-	if instance.Config.IsSelf(pubkey) {
-		return true
-	}
-
-	if instance.Config.CanManage(pubkey) {
-		return true
-	}
-
-	return false
-}
-
 func (instance *Instance) HasAccess(pubkey nostr.PubKey) bool {
-	if instance.IsAdmin(pubkey) {
+	if instance.Config.IsAdmin(pubkey) {
 		return true
+	}
+
+	if instance.Management.PubkeyIsBanned(pubkey) {
+		return false
 	}
 
 	filter := nostr.Filter{
@@ -190,6 +168,18 @@ func (instance *Instance) HasGroupAccess(id string, pubkey nostr.PubKey) bool {
 	}
 
 	return instance.IsGroupMember(id, pubkey)
+}
+
+func (instance *Instance) IsInternalEvent(event nostr.Event) bool {
+	if event.Kind == nostr.KindApplicationSpecificData {
+		tag := event.Tags.Find("d")
+
+		if tag != nil && strings.HasPrefix(tag[1], "zooid/") {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (instance *Instance) AllowRecipientEvent(event nostr.Event) bool {
@@ -234,7 +224,7 @@ func (instance *Instance) GenerateInviteEvent(pubkey nostr.PubKey) nostr.Event {
 		},
 	}
 
-	event.Sign(instance.Secret)
+	event.Sign(instance.Config.Secret)
 
 	err := instance.Events.SaveEvent(event)
 	if err != nil {
@@ -299,11 +289,15 @@ func (instance *Instance) OnEvent(ctx context.Context, event nostr.Event) (rejec
 		return true, "restricted: you are not a member of this relay"
 	}
 
+	if instance.IsInternalEvent(event) {
+		return true, "invalid: this event is not accepted"
+	}
+
 	if slices.Contains(nip29.MetadataEventKinds, event.Kind) {
 		return true, "invalid: group metadata cannot be set directly"
 	}
 
-	if slices.Contains(nip29.ModerationEventKinds, event.Kind) && !instance.IsAdmin(event.PubKey) {
+	if slices.Contains(nip29.ModerationEventKinds, event.Kind) && !instance.Config.IsAdmin(event.PubKey) {
 		return true, "restricted: you are not authorized to manage groups"
 	}
 
@@ -351,6 +345,10 @@ func (instance *Instance) OnEvent(ctx context.Context, event nostr.Event) (rejec
 		}
 	}
 
+	if instance.Management.EventIsBanned(event.ID) {
+		return true, "restricted: this event has been banned from this relay"
+	}
+
 	return false, ""
 }
 
@@ -368,7 +366,7 @@ func (instance *Instance) DeleteEvent(ctx context.Context, id nostr.ID) error {
 
 func (instance *Instance) OnEventSaved(ctx context.Context, event nostr.Event) {
 	addEvent := func(newEvent nostr.Event) {
-		if err := newEvent.Sign(instance.Secret); err != nil {
+		if err := newEvent.Sign(instance.Config.Secret); err != nil {
 			log.Println(err)
 		} else {
 			if err := instance.Events.SaveEvent(newEvent); err != nil {
@@ -438,7 +436,7 @@ func (instance *Instance) QueryStored(ctx context.Context, filter nostr.Filter) 
 		}
 
 		stripSignature := func(event nostr.Event) nostr.Event {
-			if instance.Config.Policy.StripSignatures && !instance.IsAdmin(pubkey) {
+			if instance.Config.Policy.StripSignatures && !instance.Config.IsAdmin(pubkey) {
 				var zeroSig [64]byte
 				event.Sig = zeroSig
 			}

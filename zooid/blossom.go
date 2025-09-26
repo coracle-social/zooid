@@ -15,8 +15,7 @@ import (
 
 type BlossomStore struct {
 	Config *Config
-	Schema *Schema
-	Store  eventstore.Store
+	Events eventstore.Store
 }
 
 func (bl *BlossomStore) Init() error {
@@ -26,24 +25,17 @@ func (bl *BlossomStore) Init() error {
 		return err
 	}
 
-	// Blossom uses a wrapped event store for metadata
-	bl.Store = &EventStore{Schema: bl.Schema}
-
-	if err := bl.Store.Init(); err != nil {
-		return err
-	}
-
 	return nil
 }
 
 func (bl *BlossomStore) Enable(instance *Instance) {
 	fs := afero.NewOsFs()
 	dir := Env("DATA") + "/media"
-	backend := blossom.New(instance.Relay, "https://"+instance.Host)
+	backend := blossom.New(instance.Relay, "https://"+bl.Config.Host)
 
 	backend.Store = blossom.EventStoreBlobIndexWrapper{
-		Store:      bl.Store,
-		ServiceURL: "https://" + instance.Host,
+		Store:      bl.Events,
+		ServiceURL: "https://" + bl.Config.Host,
 	}
 
 	backend.StoreBlob = func(ctx context.Context, sha256 string, ext string, body []byte) error {

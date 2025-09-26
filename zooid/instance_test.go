@@ -11,7 +11,8 @@ func createTestInstance() *Instance {
 	ownerPubkey := ownerSecret.Public()
 
 	config := &Config{
-		Host: "test.com",
+		Host:   "test.com",
+		Secret: ownerSecret,
 		Self: struct {
 			Name        string `toml:"name"`
 			Icon        string `toml:"icon"`
@@ -35,14 +36,17 @@ func createTestInstance() *Instance {
 	}
 
 	schema := &Schema{Name: "test_" + RandomString(8)}
+	events := &EventStore{
+		Config: config,
+		Schema: schema,
+	}
 
 	instance := &Instance{
-		Host:   "test.com",
 		Config: config,
-		Secret: ownerSecret,
-		Events: &EventStore{
+		Events: events,
+		Management: &ManagementStore{
 			Config: config,
-			Schema: schema,
+			Events: events,
 		},
 	}
 
@@ -54,16 +58,16 @@ func createTestInstance() *Instance {
 func TestInstance_IsAdmin(t *testing.T) {
 	instance := createTestInstance()
 
-	ownerPubkey := instance.Secret.Public()
+	ownerPubkey := instance.Config.Secret.Public()
 	otherPubkey := nostr.Generate().Public()
 
 	// Test owner is admin
-	if !instance.IsAdmin(ownerPubkey) {
+	if !instance.Config.IsAdmin(ownerPubkey) {
 		t.Error("IsAdmin() should return true for owner")
 	}
 
 	// Test non-owner is not admin
-	if instance.IsAdmin(otherPubkey) {
+	if instance.Config.IsAdmin(otherPubkey) {
 		t.Error("IsAdmin() should return false for non-owner")
 	}
 
@@ -74,7 +78,7 @@ func TestInstance_IsAdmin(t *testing.T) {
 		CanManage: true,
 	}
 
-	if !instance.IsAdmin(managerPubkey) {
+	if !instance.Config.IsAdmin(managerPubkey) {
 		t.Error("IsAdmin() should return true for user with manage permissions")
 	}
 }
@@ -82,7 +86,7 @@ func TestInstance_IsAdmin(t *testing.T) {
 func TestInstance_HasAccess(t *testing.T) {
 	instance := createTestInstance()
 
-	ownerPubkey := instance.Secret.Public()
+	ownerPubkey := instance.Config.Secret.Public()
 	userSecret := nostr.Generate()
 	userPubkey := userSecret.Public()
 
@@ -126,7 +130,7 @@ func TestInstance_IsGroupMember(t *testing.T) {
 
 	// Add user to group
 	putUserEvent := MakePutUserEvent(groupID, userPubkey)
-	putUserEvent.Sign(instance.Secret)
+	putUserEvent.Sign(instance.Config.Secret)
 	instance.Events.SaveEvent(putUserEvent)
 
 	// Test user is now a member
@@ -137,7 +141,7 @@ func TestInstance_IsGroupMember(t *testing.T) {
 	// Remove user from group (with a later timestamp to ensure proper ordering)
 	removeUserEvent := MakeRemoveUserEvent(groupID, userPubkey)
 	removeUserEvent.CreatedAt = nostr.Now() + 1 // Make it newer
-	removeUserEvent.Sign(instance.Secret)
+	removeUserEvent.Sign(instance.Config.Secret)
 	instance.Events.SaveEvent(removeUserEvent)
 
 	// Test user is no longer a member
@@ -161,7 +165,7 @@ func TestInstance_HasGroupAccess(t *testing.T) {
 			{"name", "Open Group"},
 		},
 	}
-	openGroupMeta.Sign(instance.Secret)
+	openGroupMeta.Sign(instance.Config.Secret)
 	instance.Events.SaveEvent(openGroupMeta)
 
 	// Test access to open group
@@ -180,7 +184,7 @@ func TestInstance_HasGroupAccess(t *testing.T) {
 			{"closed", ""},
 		},
 	}
-	closedGroupMeta.Sign(instance.Secret)
+	closedGroupMeta.Sign(instance.Config.Secret)
 	instance.Events.SaveEvent(closedGroupMeta)
 
 	// Test no access to closed group for non-member
@@ -190,7 +194,7 @@ func TestInstance_HasGroupAccess(t *testing.T) {
 
 	// Add user as member to closed group
 	putUserEvent := MakePutUserEvent(closedGroupID, userPubkey)
-	putUserEvent.Sign(instance.Secret)
+	putUserEvent.Sign(instance.Config.Secret)
 	instance.Events.SaveEvent(putUserEvent)
 
 	// Test access to closed group for member
@@ -216,9 +220,9 @@ func TestInstance_AllowRecipientEvent(t *testing.T) {
 	instance.Events.SaveEvent(joinEvent)
 
 	tests := []struct {
-		name string
+		name  string
 		event nostr.Event
-		want bool
+		want  bool
 	}{
 		{
 			name: "zap event with valid recipient",
@@ -285,7 +289,7 @@ func TestInstance_GenerateInviteEvent(t *testing.T) {
 		t.Errorf("GenerateInviteEvent() kind = %v, want %v", inviteEvent.Kind, AUTH_INVITE)
 	}
 
-	if inviteEvent.PubKey != instance.Secret.Public() {
+	if inviteEvent.PubKey != instance.Config.Secret.Public() {
 		t.Error("GenerateInviteEvent() should be signed by instance")
 	}
 
@@ -387,7 +391,7 @@ func TestInstance_GetGroupMetadataEvent(t *testing.T) {
 			{"name", "Test Group"},
 		},
 	}
-	originalMeta.Sign(instance.Secret)
+	originalMeta.Sign(instance.Config.Secret)
 	instance.Events.SaveEvent(originalMeta)
 
 	// Test with metadata event
@@ -398,5 +402,89 @@ func TestInstance_GetGroupMetadataEvent(t *testing.T) {
 
 	if metaEvent.ID != originalMeta.ID {
 		t.Error("GetGroupMetadataEvent() should return correct metadata event")
+	}
+}
+
+func TestInstance_IsInternalEvent(t *testing.T) {
+	instance := createTestInstance()
+
+	tests := []struct {
+		name  string
+		event nostr.Event
+		want  bool
+	}{
+		{
+			name: "internal zooid event",
+			event: nostr.Event{
+				Kind: nostr.KindApplicationSpecificData,
+				Tags: nostr.Tags{{"d", "zooid/banned_pubkeys"}},
+			},
+			want: true,
+		},
+		{
+			name: "internal zooid event with different data",
+			event: nostr.Event{
+				Kind: nostr.KindApplicationSpecificData,
+				Tags: nostr.Tags{{"d", "zooid/some_data"}},
+			},
+			want: true,
+		},
+		{
+			name: "non-internal event",
+			event: nostr.Event{
+				Kind: nostr.KindApplicationSpecificData,
+				Tags: nostr.Tags{{"d", "external/data"}},
+			},
+			want: false,
+		},
+		{
+			name: "wrong kind",
+			event: nostr.Event{
+				Kind: nostr.KindTextNote,
+				Tags: nostr.Tags{{"d", "zooid/data"}},
+			},
+			want: false,
+		},
+		{
+			name: "no d tag",
+			event: nostr.Event{
+				Kind: nostr.KindApplicationSpecificData,
+				Tags: nostr.Tags{{"t", "tag"}},
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := instance.IsInternalEvent(tt.event)
+			if result != tt.want {
+				t.Errorf("IsInternalEvent() = %v, want %v", result, tt.want)
+			}
+		})
+	}
+}
+
+func TestInstance_HasAccess_WithBannedUser(t *testing.T) {
+	instance := createTestInstance()
+
+	userSecret := nostr.Generate()
+	userPubkey := userSecret.Public()
+
+	// Add user to banned list
+	instance.Management.BanPubkey(userPubkey, "test ban")
+
+	// Test banned user has no access even with join event
+	joinEvent := nostr.Event{
+		Kind:      AUTH_JOIN,
+		CreatedAt: nostr.Now(),
+		PubKey:    userPubkey,
+		Tags:      nostr.Tags{{"claim", "test"}},
+	}
+	joinEvent.Sign(userSecret)
+	instance.Events.SaveEvent(joinEvent)
+
+	if instance.HasAccess(userPubkey) {
+		t.Error("HasAccess() should return false for banned user even with join event")
 	}
 }

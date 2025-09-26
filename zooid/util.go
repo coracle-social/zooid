@@ -7,8 +7,10 @@ import (
 )
 
 const (
-	AUTH_JOIN   = 28934
-	AUTH_INVITE = 28935
+	AUTH_JOIN      = 28934
+	AUTH_INVITE    = 28935
+	BANNED_PUBKEYS = "zooid/banned_pubkeys"
+	BANNED_EVENTS  = "zooid/banned_events"
 )
 
 func First[T any](s []T) T {

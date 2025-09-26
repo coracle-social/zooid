@@ -15,8 +15,9 @@ type Role struct {
 }
 
 type Config struct {
-	Host string
-	Self struct {
+	Host   string
+	Secret nostr.SecretKey
+	Self   struct {
 		Name        string `toml:"name"`
 		Icon        string `toml:"icon"`
 		Schema      string `toml:"schema"`
@@ -55,7 +56,13 @@ func LoadConfig(hostname string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config file %s: %w", path, err)
 	}
 
+	secret, err := nostr.SecretKeyFromHex(config.Self.Secret)
+	if err != nil {
+		return nil, err
+	}
+
 	config.Host = hostname
+	config.Secret = secret
 
 	return &config, nil
 }
@@ -98,6 +105,22 @@ func (config *Config) CanInvite(pubkey nostr.PubKey) bool {
 		if role.CanInvite {
 			return true
 		}
+	}
+
+	return false
+}
+
+func (config *Config) IsAdmin(pubkey nostr.PubKey) bool {
+	if config.IsOwner(pubkey) {
+		return true
+	}
+
+	if config.IsSelf(pubkey) {
+		return true
+	}
+
+	if config.CanManage(pubkey) {
+		return true
 	}
 
 	return false

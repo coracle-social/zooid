@@ -8,7 +8,12 @@ import (
 
 func createTestEventStore() *EventStore {
 	schema := &Schema{Name: "test_" + RandomString(8)}
+	config := &Config{
+		Host:   "test.com",
+		Secret: nostr.Generate(),
+	}
 	return &EventStore{
+		Config: config,
 		Schema: schema,
 	}
 }
@@ -521,4 +526,41 @@ func TestEventStore_Close(t *testing.T) {
 
 	// Close should not panic or error
 	store.Close()
+}
+
+func TestEventStore_GetOrCreateApplicationSpecificData(t *testing.T) {
+	store := createTestEventStore()
+	store.Init()
+
+	dTag := "test/data"
+
+	// Test creating new data when none exists
+	event1 := store.GetOrCreateApplicationSpecificData(dTag)
+
+	if event1.Kind != nostr.KindApplicationSpecificData {
+		t.Errorf("GetOrCreateApplicationSpecificData() kind = %v, want %v", event1.Kind, nostr.KindApplicationSpecificData)
+	}
+
+	dTagFound := event1.Tags.Find("d")
+	if dTagFound == nil || dTagFound[1] != dTag {
+		t.Errorf("GetOrCreateApplicationSpecificData() d tag = %v, want %v", dTagFound, dTag)
+	}
+
+	if event1.PubKey != store.Config.Secret.Public() {
+		t.Error("GetOrCreateApplicationSpecificData() should be signed by config secret")
+	}
+
+	// Test retrieving existing data
+	event2 := store.GetOrCreateApplicationSpecificData(dTag)
+
+	if event1.ID != event2.ID {
+		t.Error("GetOrCreateApplicationSpecificData() should return same event when called again")
+	}
+
+	// Test with different d tag creates new event
+	event3 := store.GetOrCreateApplicationSpecificData("other/data")
+
+	if event1.ID == event3.ID {
+		t.Error("GetOrCreateApplicationSpecificData() should create different event for different d tag")
+	}
 }

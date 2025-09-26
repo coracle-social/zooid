@@ -333,3 +333,32 @@ func (events *EventStore) CountEvents(filter nostr.Filter) (uint32, error) {
 
 	return count, nil
 }
+
+// Non-eventstore methods
+
+func (events *EventStore) GetOrCreateApplicationSpecificData(d string) nostr.Event {
+	filter := nostr.Filter{
+		Kinds: []nostr.Kind{nostr.KindApplicationSpecificData},
+		Tags: nostr.TagMap{
+			"d": []string{d},
+		},
+	}
+
+	for event := range events.QueryEvents(filter, 1) {
+		return event
+	}
+
+	event := nostr.Event{
+		Kind:      nostr.KindApplicationSpecificData,
+		CreatedAt: nostr.Now(),
+		Tags: nostr.Tags{
+			[]string{"d", d},
+		},
+	}
+
+	event.Sign(events.Config.Secret)
+
+	events.SaveEvent(event)
+
+	return event
+}
