@@ -5,6 +5,7 @@ import (
 	"iter"
 	"log"
 	"net/http"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -13,8 +14,85 @@ import (
 	"fiatjaf.com/nostr/eventstore"
 	"fiatjaf.com/nostr/khatru"
 	"fiatjaf.com/nostr/nip29"
+	"github.com/fsnotify/fsnotify"
 	"github.com/gosimple/slug"
 )
+
+// Top level instance creation/destruction
+
+var (
+	instances     map[string]*Instance
+	instancesOnce sync.Once
+	instancesMux  sync.RWMutex
+)
+
+func GetInstance(hostname string) (*Instance, error) {
+	instancesMux.RLock()
+	defer instancesMux.RUnlock()
+
+	instancesOnce.Do(func() {
+		instances = make(map[string]*Instance)
+	})
+
+	instance, exists := instances[hostname]
+
+	if !exists {
+		newInstance, err := MakeInstance(hostname)
+		if err != nil {
+			return nil, err
+		}
+
+		instances[hostname] = newInstance
+		instance = newInstance
+	}
+
+	return instance, nil
+}
+
+func MonitorInstances() {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Printf("Failed to create file watcher: %v", err)
+		return
+	}
+	defer watcher.Close()
+
+	if err := watcher.Add("./config"); err != nil {
+		log.Printf("Failed to watch config directory: %v", err)
+		return
+	}
+
+	log.Printf("Watching config directory for changes")
+
+	for {
+		select {
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return
+			}
+
+			hostname := filepath.Base(event.Name)
+
+			if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) || event.Has(fsnotify.Remove) {
+				log.Printf("Config file changed/deleted: %s", event.Name)
+
+				instancesMux.Lock()
+				if instance, exists := instances[hostname]; exists {
+					instance.Cleanup()
+				}
+				instancesMux.Unlock()
+			}
+
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return
+			}
+			log.Printf("File watcher error: %v", err)
+		}
+	}
+}
+
+// Instance struct
 
 type Instance struct {
 	Config     *Config
@@ -60,6 +138,7 @@ func MakeInstance(hostname string) (*Instance, error) {
 		Relay:      khatru.NewRelay(),
 	}
 
+	instance.Relay.Negentropy = true
 	instance.Relay.Info.Name = config.Self.Name
 	instance.Relay.Info.Icon = config.Self.Icon
 	instance.Relay.Info.PubKey = &pubkey
@@ -103,28 +182,14 @@ func MakeInstance(hostname string) (*Instance, error) {
 	return instance, nil
 }
 
-var (
-	instances    map[string]*Instance
-	instanceOnce sync.Once
-)
+func (instance *Instance) Cleanup() bool {
+	// Close the event store
+	instance.Events.Close()
 
-func GetInstance(hostname string) (*Instance, error) {
-	instanceOnce.Do(func() {
-		instances = make(map[string]*Instance)
-	})
+	// Remove from instances map
+	delete(instances, instance.Config.Host)
 
-	instance, exists := instances[hostname]
-	if !exists {
-		newInstance, err := MakeInstance(hostname)
-		if err != nil {
-			return nil, err
-		}
-
-		instances[hostname] = newInstance
-		instance = newInstance
-	}
-
-	return instance, nil
+	return true
 }
 
 // Utility methods

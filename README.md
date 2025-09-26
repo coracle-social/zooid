@@ -15,7 +15,7 @@ Zooid supports a few environment variables, which configure shared resources lik
 
 ## Configuration
 
-Configuration files are written using [toml](https://toml.io). The name of the configuration file should be the hostname the relay serves, for example `relay.example.com`. Config files contain the following sections:
+Configuration files are written using [toml](https://toml.io) files placed in the `./config` directory. The name of the configuration file should be the hostname the relay serves, for example `relay.example.com`. Config files contain the following sections:
 
 ### `[self]`
 
@@ -108,6 +108,5 @@ See `justfile` for defined commands.
 
 ## TODO
 
-- [ ] Watch configuration files and hot reload
 - [ ] Free up resources after instance inactivity
 - [ ] Admin/member lists

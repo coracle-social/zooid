@@ -31,6 +31,8 @@ func main() {
 		}
 	}()
 
+	go zooid.MonitorInstances()
+
 	<-shutdown
 
 	fmt.Println("\nShutting down gracefully...")

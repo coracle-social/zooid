@@ -49,7 +49,7 @@ type Config struct {
 }
 
 func LoadConfig(hostname string) (*Config, error) {
-	path := filepath.Join("configs", hostname)
+	path := filepath.Join("config", hostname)
 
 	var config Config
 	if _, err := toml.DecodeFile(path, &config); err != nil {
