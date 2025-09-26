@@ -23,7 +23,7 @@ var _ eventstore.Store = (*EventStore)(nil)
 func (events *EventStore) Init() error {
 	// Create basic schema first
 	basicSchema := events.Schema.Render(`
-	CREATE TABLE IF NOT EXISTS {{.Prefix}}__events (
+	CREATE TABLE IF NOT EXISTS {{.Name}}__events (
 		id TEXT PRIMARY KEY,
 		created_at INTEGER NOT NULL,
 		kind INTEGER NOT NULL,
@@ -33,22 +33,22 @@ func (events *EventStore) Init() error {
 		sig TEXT NOT NULL
 	);
 
-	CREATE INDEX IF NOT EXISTS {{.Prefix}}__idx_events_created_at ON {{.Prefix}}__events(created_at);
-	CREATE INDEX IF NOT EXISTS {{.Prefix}}__idx_events_kind ON {{.Prefix}}__events(kind);
-	CREATE INDEX IF NOT EXISTS {{.Prefix}}__idx_events_pubkey ON {{.Prefix}}__events(pubkey);
-	CREATE INDEX IF NOT EXISTS {{.Prefix}}__idx_events_kind_pubkey ON {{.Prefix}}__events(kind, pubkey);
-	CREATE INDEX IF NOT EXISTS {{.Prefix}}__idx_events_kind_pubkey_created_at ON {{.Prefix}}__events(kind, pubkey, created_at DESC);
+	CREATE INDEX IF NOT EXISTS {{.Name}}__idx_events_created_at ON {{.Name}}__events(created_at);
+	CREATE INDEX IF NOT EXISTS {{.Name}}__idx_events_kind ON {{.Name}}__events(kind);
+	CREATE INDEX IF NOT EXISTS {{.Name}}__idx_events_pubkey ON {{.Name}}__events(pubkey);
+	CREATE INDEX IF NOT EXISTS {{.Name}}__idx_events_kind_pubkey ON {{.Name}}__events(kind, pubkey);
+	CREATE INDEX IF NOT EXISTS {{.Name}}__idx_events_kind_pubkey_created_at ON {{.Name}}__events(kind, pubkey, created_at DESC);
 
-	CREATE TABLE IF NOT EXISTS {{.Prefix}}__event_tags (
+	CREATE TABLE IF NOT EXISTS {{.Name}}__event_tags (
 		event_id TEXT NOT NULL,
 		key TEXT NOT NULL,
 		value TEXT NOT NULL,
-		FOREIGN KEY (event_id) REFERENCES {{.Prefix}}__events(id) ON DELETE CASCADE
+		FOREIGN KEY (event_id) REFERENCES {{.Name}}__events(id) ON DELETE CASCADE
 	);
 
-	CREATE INDEX IF NOT EXISTS {{.Prefix}}__idx_event_tags_event_id ON {{.Prefix}}__event_tags(event_id);
-	CREATE INDEX IF NOT EXISTS {{.Prefix}}__idx_event_tags_key ON {{.Prefix}}__event_tags(key);
-	CREATE INDEX IF NOT EXISTS {{.Prefix}}__idx_event_tags_key_value ON {{.Prefix}}__event_tags(key, value);
+	CREATE INDEX IF NOT EXISTS {{.Name}}__idx_event_tags_event_id ON {{.Name}}__event_tags(event_id);
+	CREATE INDEX IF NOT EXISTS {{.Name}}__idx_event_tags_key ON {{.Name}}__event_tags(key);
+	CREATE INDEX IF NOT EXISTS {{.Name}}__idx_event_tags_key_value ON {{.Name}}__event_tags(key, value);
 	`)
 
 	if _, err := GetDb().Exec(basicSchema); err != nil {
@@ -57,25 +57,25 @@ func (events *EventStore) Init() error {
 
 	// Try to create FTS5 schema - if it fails, continue without it
 	ftsSchema := `
-	CREATE VIRTUAL TABLE IF NOT EXISTS {{.Prefix}}__events_fts USING fts5(
+	CREATE VIRTUAL TABLE IF NOT EXISTS {{.Name}}__events_fts USING fts5(
 		content,
-		content='{{.Prefix}}__events',
+		content='{{.Name}}__events',
 		content_rowid='rowid'
 	);
 
-	CREATE TRIGGER IF NOT EXISTS {{.Prefix}}__events_ai AFTER INSERT ON {{.Prefix}}__events BEGIN
-		INSERT INTO {{.Prefix}}__events_fts(rowid, content) VALUES (new.rowid, new.content);
+	CREATE TRIGGER IF NOT EXISTS {{.Name}}__events_ai AFTER INSERT ON {{.Name}}__events BEGIN
+		INSERT INTO {{.Name}}__events_fts(rowid, content) VALUES (new.rowid, new.content);
 	END;
 
-	CREATE TRIGGER IF NOT EXISTS {{.Prefix}}__events_ad AFTER DELETE ON {{.Prefix}}__events BEGIN
-		INSERT INTO {{.Prefix}}__events_fts({{.Prefix}}__events_fts, rowid, content)
+	CREATE TRIGGER IF NOT EXISTS {{.Name}}__events_ad AFTER DELETE ON {{.Name}}__events BEGIN
+		INSERT INTO {{.Name}}__events_fts({{.Name}}__events_fts, rowid, content)
 		VALUES('delete', old.rowid, old.content);
 	END;
 
-	CREATE TRIGGER IF NOT EXISTS {{.Prefix}}__events_au AFTER UPDATE ON {{.Prefix}}__events BEGIN
-		INSERT INTO {{.Prefix}}__events_fts({{.Prefix}}__events_fts, rowid, content)
+	CREATE TRIGGER IF NOT EXISTS {{.Name}}__events_au AFTER UPDATE ON {{.Name}}__events BEGIN
+		INSERT INTO {{.Name}}__events_fts({{.Name}}__events_fts, rowid, content)
 		VALUES('delete', old.rowid, old.content);
-		INSERT INTO {{.Prefix}}__events_fts(rowid, content)
+		INSERT INTO {{.Name}}__events_fts(rowid, content)
 		VALUES (new.rowid, new.content);
 	END;
 	`
@@ -165,7 +165,7 @@ func (events *EventStore) buildSelectQuery(filter nostr.Filter) squirrel.SelectB
 
 	// Handle search with FTS (if available)
 	if filter.Search != "" && events.FTSAvailable {
-		qb = qb.Join(events.Schema.Render("{{.Prefix}}__events_fts ON {{.Prefix}}__events.rowid = {{.Prefix}}__events_fts.rowid")).
+		qb = qb.Join(events.Schema.Render("{{.Name}}__events_fts ON {{.Name}}__events.rowid = {{.Name}}__events_fts.rowid")).
 			Where(squirrel.Eq{"events_fts": filter.Search})
 	} else if filter.Search != "" {
 		// Fallback to LIKE search if FTS not available

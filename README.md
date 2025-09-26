@@ -108,9 +108,9 @@ See `justfile` for defined commands.
 
 ## TODO
 
-- [ ] See if we can build groups directly on top of the event store by generating events eagerly rather than lazily
-- [ ] See if we can implement invites/redemptions directly on top of the event store by storing generated claims and redemptions. Avoid serving these to other people.
+- [ ] Base management API on event store
+- [ ] Check banned pubkey status when checking access
 - [ ] Add admin/owner/etc to list allowed pubkeys
 - [ ] Watch configuration files and hot reload
 - [ ] Free up resources after instance inactivity
-- [ ] Admins/members
+- [ ] Admin/member lists

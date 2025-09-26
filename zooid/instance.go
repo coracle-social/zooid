@@ -238,7 +238,7 @@ func (instance *Instance) GenerateInviteEvent(pubkey nostr.PubKey) nostr.Event {
 
 	err := instance.Events.SaveEvent(event)
 	if err != nil {
-		log.Printf("Failed to generate invite event: %w", err)
+		log.Printf("Failed to generate invite event: %v", err)
 	}
 
 	return event
