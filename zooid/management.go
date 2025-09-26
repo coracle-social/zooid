@@ -5,6 +5,7 @@ import (
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/khatru"
 	"fiatjaf.com/nostr/nip86"
+	"fmt"
 )
 
 type ManagementStore struct {
@@ -155,6 +156,45 @@ func (m *ManagementStore) Enable(instance *Instance) {
 				nip86.PubKeyReason{
 					PubKey: item.Pubkey,
 					Reason: item.Reason,
+				},
+			)
+		}
+
+		return reasons, nil
+	}
+
+	instance.Relay.ManagementAPI.ListAllowedPubKeys = func(ctx context.Context) ([]nip86.PubKeyReason, error) {
+		reasons := make([]nip86.PubKeyReason, 0)
+
+		reasons = append(reasons, nip86.PubKeyReason{
+			PubKey: nostr.MustPubKeyFromHex(m.Config.Self.Pubkey),
+			Reason: "relay owner",
+		})
+
+		reasons = append(reasons, nip86.PubKeyReason{
+			PubKey: m.Config.Secret.Public(),
+			Reason: "relay self",
+		})
+
+		for name, role := range m.Config.Roles {
+			for _, pubkey := range role.Pubkeys {
+				reasons = append(reasons, nip86.PubKeyReason{
+					PubKey: nostr.MustPubKeyFromHex(pubkey),
+					Reason: fmt.Sprintf("assigned to role: %s", name),
+				})
+			}
+		}
+
+		filter := nostr.Filter{
+			Kinds: []nostr.Kind{AUTH_JOIN},
+		}
+
+		for event := range m.Events.QueryEvents(filter, 0) {
+			reasons = append(
+				reasons,
+				nip86.PubKeyReason{
+					PubKey: event.PubKey,
+					Reason: "joined via invite code",
 				},
 			)
 		}

@@ -108,7 +108,6 @@ See `justfile` for defined commands.
 
 ## TODO
 
-- [ ] Add admin/owner/etc to list allowed pubkeys
 - [ ] Watch configuration files and hot reload
 - [ ] Free up resources after instance inactivity
 - [ ] Admin/member lists

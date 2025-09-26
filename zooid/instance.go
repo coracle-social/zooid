@@ -134,10 +134,6 @@ func (instance *Instance) HasAccess(pubkey nostr.PubKey) bool {
 		return true
 	}
 
-	if instance.Management.PubkeyIsBanned(pubkey) {
-		return false
-	}
-
 	filter := nostr.Filter{
 		Kinds:   []nostr.Kind{AUTH_JOIN},
 		Authors: []nostr.PubKey{pubkey},
