@@ -51,12 +51,20 @@ type Config struct {
 	secret nostr.SecretKey
 }
 
-func LoadConfig(hostname string) (*Config, error) {
-	path := filepath.Join("config", hostname)
+func LoadConfig(filename string) (*Config, error) {
+	path := filepath.Join(Env("CONFIG"), filename)
 
 	var config Config
 	if _, err := toml.DecodeFile(path, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse config file %s: %w", path, err)
+		return nil, fmt.Errorf("Failed to parse config file %s: %w", path, err)
+	}
+
+	if config.Host == "" {
+		return nil, fmt.Errorf("host is required")
+	}
+
+	if config.Schema == "" {
+		return nil, fmt.Errorf("schema is required")
 	}
 
 	secret, err := nostr.SecretKeyFromHex(config.Secret)
@@ -84,7 +92,7 @@ func (config *Config) Sign(event *nostr.Event) error {
 }
 
 func (config *Config) IsOwner(pubkey nostr.PubKey) bool {
-	return pubkey == nostr.MustPubKeyFromHex(config.Info.Pubkey)
+	return pubkey.Hex() == config.Info.Pubkey
 }
 
 func (config *Config) GetRolesForPubkey(pubkey nostr.PubKey) []Role {

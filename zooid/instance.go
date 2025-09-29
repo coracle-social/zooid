@@ -5,101 +5,15 @@ import (
 	"iter"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
 
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/eventstore"
 	"fiatjaf.com/nostr/khatru"
 	"fiatjaf.com/nostr/nip29"
-	"github.com/fsnotify/fsnotify"
 	"github.com/gosimple/slug"
 )
-
-// Top level instance creation/destruction
-
-var (
-	instances     map[string]*Instance
-	instancesOnce sync.Once
-	instancesMux  sync.RWMutex
-)
-
-func GetInstance(hostname string) (*Instance, error) {
-	instancesMux.RLock()
-	defer instancesMux.RUnlock()
-
-	instancesOnce.Do(func() {
-		instances = make(map[string]*Instance)
-	})
-
-	instance, exists := instances[hostname]
-
-	if !exists {
-		newInstance, err := MakeInstance(hostname)
-		if err != nil {
-			return nil, err
-		}
-
-		instances[hostname] = newInstance
-		instance = newInstance
-	}
-
-	return instance, nil
-}
-
-func MonitorInstances() {
-	dir := Env("CONF")
-
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		log.Fatal("Failed to create config directory: %v", err)
-	}
-
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		log.Printf("Failed to create file watcher: %v", err)
-		return
-	}
-	defer watcher.Close()
-
-	if err := watcher.Add(dir); err != nil {
-		log.Printf("Failed to watch config directory: %v", err)
-		return
-	}
-
-	log.Printf("Watching config directory for changes")
-
-	for {
-		select {
-		case event, ok := <-watcher.Events:
-			if !ok {
-				return
-			}
-
-			hostname := filepath.Base(event.Name)
-
-			if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) || event.Has(fsnotify.Remove) {
-				log.Printf("Config file changed/deleted: %s", event.Name)
-
-				instancesMux.Lock()
-				if instance, exists := instances[hostname]; exists {
-					instance.Cleanup()
-				}
-				instancesMux.Unlock()
-			}
-
-		case err, ok := <-watcher.Errors:
-			if !ok {
-				return
-			}
-			log.Printf("File watcher error: %v", err)
-		}
-	}
-}
-
-// Instance struct
 
 type Instance struct {
 	Config     *Config
@@ -109,13 +23,8 @@ type Instance struct {
 	Relay      *khatru.Relay
 }
 
-func MakeInstance(hostname string) (*Instance, error) {
-	config, err := LoadConfig(hostname)
-	if err != nil {
-		return nil, err
-	}
-
-	pubkey, err := nostr.PubKeyFromHex(config.Info.Pubkey)
+func MakeInstance(filename string) (*Instance, error) {
+	config, err := LoadConfig(filename)
 	if err != nil {
 		return nil, err
 	}
@@ -148,11 +57,19 @@ func MakeInstance(hostname string) (*Instance, error) {
 	instance.Relay.Negentropy = true
 	instance.Relay.Info.Name = config.Info.Name
 	instance.Relay.Info.Icon = config.Info.Icon
-	instance.Relay.Info.PubKey = &pubkey
 	instance.Relay.Info.Description = config.Info.Description
 	// instance.Relay.Info.Self = nostr.GetPublicKey(secret)
 	instance.Relay.Info.Software = "https://github.com/coracle-social/zooid"
 	instance.Relay.Info.Version = "v0.1.0"
+
+	if config.Info.Pubkey != "" {
+		pubkey, err := nostr.PubKeyFromHex(config.Info.Pubkey)
+		if err != nil {
+			return nil, err
+		}
+
+		instance.Relay.Info.PubKey = &pubkey
+	}
 
 	instance.Relay.UseEventstore(instance.Events, 400)
 
@@ -171,11 +88,7 @@ func MakeInstance(hostname string) (*Instance, error) {
 	// Initialize stuff
 
 	if err := instance.Events.Init(); err != nil {
-		log.Fatal("Failed to initialize event store:", err)
-	}
-
-	if err := instance.Blossom.Init(); err != nil {
-		log.Fatal("Failed to initialize blossom store:", err)
+		log.Fatal("Failed to initialize event store: ", err)
 	}
 
 	if config.Blossom.Enabled {
@@ -189,14 +102,8 @@ func MakeInstance(hostname string) (*Instance, error) {
 	return instance, nil
 }
 
-func (instance *Instance) Cleanup() bool {
-	// Close the event store
+func (instance *Instance) Cleanup() {
 	instance.Events.Close()
-
-	// Remove from instances map
-	delete(instances, instance.Config.Host)
-
-	return true
 }
 
 // Utility methods

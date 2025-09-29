@@ -20,8 +20,17 @@ func main() {
 
 	port := zooid.Env("PORT")
 	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%s", port),
-		Handler: http.HandlerFunc(zooid.ServeHTTP),
+		Addr: fmt.Sprintf(":%s", port),
+		Handler: http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				instance, exists := zooid.Dispatch(r.Host)
+				if exists {
+					instance.Relay.ServeHTTP(w, r)
+				} else {
+					http.Error(w, "Not Found", http.StatusNotFound)
+				}
+			},
+		),
 	}
 
 	go func() {
@@ -31,7 +40,7 @@ func main() {
 		}
 	}()
 
-	go zooid.MonitorInstances()
+	go zooid.Start()
 
 	<-shutdown
 

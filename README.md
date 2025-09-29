@@ -11,12 +11,13 @@ A single zooid instance can run any number of "virtual" relays. The `config` dir
 Zooid supports a few environment variables, which configure shared resources like the web server or sqlite database.
 
 - `PORT` - the port the server will listen on for all requests. Defaults to `3334`.
-- `DATA` - the location of the directory for storing database files and media. Defaults to `./data`.
-- `CONF` - the location of the directory for storing relay configuration files. Defaults to `./conf`.
+- `CONFIG` - where to store relay configuration files. Defaults to `./config`.
+- `MEDIA` - where to store blossom media files. Defaults to `./media`.
+- `DATA` - where to store databse files. Defaults to `./data`.
 
 ## Configuration
 
-Configuration files are written using [toml](https://toml.io) files placed in the `CONF` directory. Top level configuration options are required:
+Configuration files are written using [toml](https://toml.io). Top level configuration options are required:
 
 - `host` - a hostname to serve this relay on.
 - `schema` - a string that identifies this relay. This cannot be changed, and must be usable as a sqlite identifier.

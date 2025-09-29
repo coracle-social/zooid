@@ -5,7 +5,6 @@ import (
 	"context"
 	"io"
 	"net/url"
-	"os"
 
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/eventstore"
@@ -18,19 +17,9 @@ type BlossomStore struct {
 	Events eventstore.Store
 }
 
-func (bl *BlossomStore) Init() error {
-	dir := Env("DATA") + "/media"
-
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (bl *BlossomStore) Enable(instance *Instance) {
+	dir := Env("MEDIA")
 	fs := afero.NewOsFs()
-	dir := Env("DATA") + "/media"
 	backend := blossom.New(instance.Relay, "https://"+bl.Config.Host)
 
 	backend.Store = blossom.EventStoreBlobIndexWrapper{
