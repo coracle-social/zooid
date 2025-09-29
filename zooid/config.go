@@ -15,12 +15,12 @@ type Role struct {
 }
 
 type Config struct {
-	Host   string
-	Secret nostr.SecretKey
-	Self   struct {
+	Host   string `toml:"host"`
+	Schema string `toml:"schema"`
+	Secret string `toml:"secret"`
+	Info   struct {
 		Name        string `toml:"name"`
 		Icon        string `toml:"icon"`
-		Schema      string `toml:"schema"`
 		Secret      string `toml:"secret"`
 		Pubkey      string `toml:"pubkey"`
 		Description string `toml:"description"`
@@ -46,6 +46,9 @@ type Config struct {
 	} `toml:"blossom"`
 
 	Roles map[string]Role `toml:"roles"`
+
+	// Private/parsed values
+	secret nostr.SecretKey
 }
 
 func LoadConfig(hostname string) (*Config, error) {
@@ -56,23 +59,32 @@ func LoadConfig(hostname string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config file %s: %w", path, err)
 	}
 
-	secret, err := nostr.SecretKeyFromHex(config.Self.Secret)
+	secret, err := nostr.SecretKeyFromHex(config.Secret)
 	if err != nil {
 		return nil, err
 	}
 
-	config.Host = hostname
-	config.Secret = secret
+	// Make the secret... secret
+	config.Secret = ""
+	config.secret = secret
 
 	return &config, nil
 }
 
+func (config *Config) GetSelf() nostr.PubKey {
+	return config.secret.Public()
+}
+
 func (config *Config) IsSelf(pubkey nostr.PubKey) bool {
-	return pubkey == nostr.MustSecretKeyFromHex(config.Self.Secret).Public()
+	return pubkey == config.GetSelf()
+}
+
+func (config *Config) Sign(event *nostr.Event) error {
+	return event.Sign(config.secret)
 }
 
 func (config *Config) IsOwner(pubkey nostr.PubKey) bool {
-	return pubkey == nostr.MustPubKeyFromHex(config.Self.Pubkey)
+	return pubkey == nostr.MustPubKeyFromHex(config.Info.Pubkey)
 }
 
 func (config *Config) GetRolesForPubkey(pubkey nostr.PubKey) []Role {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
+	"log"
 
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/eventstore"
@@ -356,7 +357,9 @@ func (events *EventStore) GetOrCreateApplicationSpecificData(d string) nostr.Eve
 		},
 	}
 
-	event.Sign(events.Config.Secret)
+	if err := events.Config.Sign(&event); err != nil {
+		log.Println("Failed to sign application specific event: %w", err)
+	}
 
 	events.SaveEvent(event)
 

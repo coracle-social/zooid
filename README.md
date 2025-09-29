@@ -12,21 +12,19 @@ Zooid supports a few environment variables, which configure shared resources lik
 
 - `PORT` - the port the server will listen on for all requests. Defaults to `3334`.
 - `DATA` - the location of the directory for storing database files and media. Defaults to `./data`.
+- `CONF` - the location of the directory for storing relay configuration files. Defaults to `./conf`.
 
 ## Configuration
 
-Configuration files are written using [toml](https://toml.io) files placed in the `./config` directory. The name of the configuration file should be the hostname the relay serves, for example `relay.example.com`. Config files contain the following sections:
+Configuration files are written using [toml](https://toml.io) files placed in the `CONF` directory. Top level configuration options are required:
 
-### `[self]`
-
-Contains information for populating the relay's `nip11` document.
-
-Required:
-
+- `host` - a hostname to serve this relay on.
 - `schema` - a string that identifies this relay. This cannot be changed, and must be usable as a sqlite identifier.
 - `secret` - the nostr secret key of the relay. Will be used to populate the relay's NIP 11 `self` field and sign generated events.
 
-Optional:
+### `[info]`
+
+Contains information for populating the relay's `nip11` document.
 
 - `name` - the name of your relay.
 - `icon` - an icon for your relay.
@@ -37,7 +35,7 @@ Optional:
 
 Contains policy and access related configuration.
 
-- `strip_signatures` - whether to remove signatures when serving events. This requires clients/users to trust the relay to properly authenticate signatures. Be cautious about using this; a malicious relay will be able to execute all kinds of attacks, including potentially serving events unrelated to a community use case.
+- `strip_signatures` - whether to remove signatures when serving events to non-admins. This requires clients/users to trust the relay to properly authenticate signatures. Be cautious about using this; a malicious relay will be able to execute all kinds of attacks, including potentially serving events unrelated to a community use case.
 
 ### `[groups]`
 

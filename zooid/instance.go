@@ -5,6 +5,7 @@ import (
 	"iter"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -50,6 +51,12 @@ func GetInstance(hostname string) (*Instance, error) {
 }
 
 func MonitorInstances() {
+	dir := Env("CONF")
+
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		log.Fatal("Failed to create config directory: %v", err)
+	}
+
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		log.Printf("Failed to create file watcher: %v", err)
@@ -57,7 +64,7 @@ func MonitorInstances() {
 	}
 	defer watcher.Close()
 
-	if err := watcher.Add("./config"); err != nil {
+	if err := watcher.Add(dir); err != nil {
 		log.Printf("Failed to watch config directory: %v", err)
 		return
 	}
@@ -108,7 +115,7 @@ func MakeInstance(hostname string) (*Instance, error) {
 		return nil, err
 	}
 
-	pubkey, err := nostr.PubKeyFromHex(config.Self.Pubkey)
+	pubkey, err := nostr.PubKeyFromHex(config.Info.Pubkey)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +123,7 @@ func MakeInstance(hostname string) (*Instance, error) {
 	events := &EventStore{
 		Config: config,
 		Schema: &Schema{
-			Name: slug.Make(config.Self.Schema),
+			Name: slug.Make(config.Schema),
 		},
 	}
 
@@ -139,10 +146,10 @@ func MakeInstance(hostname string) (*Instance, error) {
 	}
 
 	instance.Relay.Negentropy = true
-	instance.Relay.Info.Name = config.Self.Name
-	instance.Relay.Info.Icon = config.Self.Icon
+	instance.Relay.Info.Name = config.Info.Name
+	instance.Relay.Info.Icon = config.Info.Icon
 	instance.Relay.Info.PubKey = &pubkey
-	instance.Relay.Info.Description = config.Self.Description
+	instance.Relay.Info.Description = config.Info.Description
 	// instance.Relay.Info.Self = nostr.GetPublicKey(secret)
 	instance.Relay.Info.Software = "https://github.com/coracle-social/zooid"
 	instance.Relay.Info.Version = "v0.1.0"
@@ -285,11 +292,12 @@ func (instance *Instance) GenerateInviteEvent(pubkey nostr.PubKey) nostr.Event {
 		},
 	}
 
-	event.Sign(instance.Config.Secret)
+	if err := instance.Config.Sign(&event); err != nil {
+		log.Printf("Failed to sign invite event: %v", err)
+	}
 
-	err := instance.Events.SaveEvent(event)
-	if err != nil {
-		log.Printf("Failed to generate invite event: %v", err)
+	if err := instance.Events.SaveEvent(event); err != nil {
+		log.Printf("Failed to save invite event: %v", err)
 	}
 
 	return event
@@ -427,7 +435,7 @@ func (instance *Instance) DeleteEvent(ctx context.Context, id nostr.ID) error {
 
 func (instance *Instance) OnEventSaved(ctx context.Context, event nostr.Event) {
 	addEvent := func(newEvent nostr.Event) {
-		if err := newEvent.Sign(instance.Config.Secret); err != nil {
+		if err := instance.Config.Sign(&newEvent); err != nil {
 			log.Println(err)
 		} else {
 			if err := instance.Events.SaveEvent(newEvent); err != nil {

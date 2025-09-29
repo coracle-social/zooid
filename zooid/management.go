@@ -167,12 +167,12 @@ func (m *ManagementStore) Enable(instance *Instance) {
 		reasons := make([]nip86.PubKeyReason, 0)
 
 		reasons = append(reasons, nip86.PubKeyReason{
-			PubKey: nostr.MustPubKeyFromHex(m.Config.Self.Pubkey),
+			PubKey: nostr.MustPubKeyFromHex(m.Config.Info.Pubkey),
 			Reason: "relay owner",
 		})
 
 		reasons = append(reasons, nip86.PubKeyReason{
-			PubKey: m.Config.Secret.Public(),
+			PubKey: m.Config.GetSelf(),
 			Reason: "relay self",
 		})
 

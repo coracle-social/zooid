@@ -17,6 +17,7 @@ func Env(k string, fallback ...string) (v string) {
 
 		env["PORT"] = "3334"
 		env["DATA"] = "./data"
+		env["CONF"] = "./conf"
 
 		for _, item := range os.Environ() {
 			parts := strings.SplitN(item, "=", 2)
