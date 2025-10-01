@@ -24,7 +24,7 @@ type Config struct {
 		Secret      string `toml:"secret"`
 		Pubkey      string `toml:"pubkey"`
 		Description string `toml:"description"`
-	} `toml:"self"`
+	} `toml:"info"`
 
 	Policy struct {
 		StripSignatures bool `toml:"strip_signatures"`

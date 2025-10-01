@@ -74,10 +74,15 @@ A special `[roles.member]` heading may be used to configure policies for all rel
 The below config file might be saved as `./config/my-relay.example.com` in order to route requests from `wss://my-relay.example.com` to this virtual relay.
 
 ```toml
-[self]
-name = "My relay"
-schema = 'my_relay'
+host = "my-relay.example.com"
+schema = "my_relay"
 secret = "ce30b1831a4551f4cb7a984033c34ab96d8cf56ff50df9d0c27d9fa5422f2278"
+
+[info]
+name = "My relay"
+icon = "https://example.com/icon.png"
+pubkey = "d9254d9898fd4728f7e2b32b87520221a50f6b8b97d935d7da2de8923988aa6d"
+description = "A community relay for my friends"
 
 [policy]
 strip_signatures = false
@@ -85,6 +90,7 @@ strip_signatures = false
 [groups]
 enabled = true
 auto_join = false
+auto_leave = true
 
 [management]
 enabled = true
@@ -123,7 +129,7 @@ echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile
 su --login zooid
 
 # Clone the repository and build
-git clone https://github.com/coracle-social/zooid.git ~/zooid && cd zooid
+git clone https://github.com/coracle-social/zooid.git ~/zooid && cd ~/zooid
 CGO_ENABLED=1 go build -o bin/zooid cmd/relay/main.go
 
 # Back to root

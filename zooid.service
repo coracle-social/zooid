@@ -1,6 +1,5 @@
 [Unit]
 Description=zooid
-ConditionPathExists=/home/zooid/zooid
 After=network.target
 
 [Service]
