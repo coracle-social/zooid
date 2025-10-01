@@ -73,6 +73,10 @@ func MakeInstance(filename string) (*Instance, error) {
 		instance.Relay.Info.PubKey = &pubkey
 	}
 
+	if instance.Config.Groups.Enabled {
+		instance.Relay.Info.SupportedNIPs = append(instance.Relay.Info.SupportedNIPs, 29)
+	}
+
 	// Handlers
 
 	instance.Relay.OnConnect = instance.OnConnect
@@ -87,7 +91,7 @@ func MakeInstance(filename string) (*Instance, error) {
 	instance.Relay.RejectConnection = instance.RejectConnection
 	instance.Relay.PreventBroadcast = instance.PreventBroadcast
 
-  // Todo: when there's a new version of khatru
+	// Todo: when there's a new version of khatru
 	// instance.Relay.StartExpirationManager()
 
 	// HTTP request handling
@@ -311,8 +315,10 @@ func (instance *Instance) OnEvent(ctx context.Context, event nostr.Event) (rejec
 
 		meta := instance.GetGroupMetadataEvent(h)
 
-		if event.Kind == nostr.KindSimpleGroupCreateGroup && !IsEmptyEvent(meta) {
-			return true, "invalid: that group already exists"
+		if event.Kind == nostr.KindSimpleGroupCreateGroup {
+			if !IsEmptyEvent(meta) {
+				return true, "invalid: that group already exists"
+			}
 		} else if IsEmptyEvent(meta) {
 			return true, "invalid: no such group exists"
 		}

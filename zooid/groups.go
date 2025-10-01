@@ -20,7 +20,7 @@ func MakeGroupMetadataFilter(h string) nostr.Filter {
 	return nostr.Filter{
 		Kinds: []nostr.Kind{nostr.KindSimpleGroupMetadata},
 		Tags: nostr.TagMap{
-			"a": []string{h},
+			"d": []string{h},
 		},
 	}
 }
@@ -29,7 +29,7 @@ func MakeGroupEventFilters(h string) []nostr.Filter {
 	return []nostr.Filter{
 		{
 			Tags: nostr.TagMap{
-				"a": []string{h},
+				"d": []string{h},
 			},
 		},
 		{
@@ -87,9 +87,19 @@ func MakeRemoveUserEvent(h string, pubkey nostr.PubKey) nostr.Event {
 }
 
 func MakeMetadataEvent(event nostr.Event) nostr.Event {
+	tags := nostr.Tags{}
+
+	for _, tag := range event.Tags {
+		if len(tag) >= 2 && tag[0] == "h" {
+			tags = append(tags, nostr.Tag{"d", tag[1]})
+		} else {
+			tags = append(tags, tag)
+		}
+	}
+
 	return nostr.Event{
 		Kind:      nostr.KindSimpleGroupMetadata,
 		CreatedAt: event.CreatedAt,
-		Tags:      event.Tags,
+		Tags:      tags,
 	}
 }
