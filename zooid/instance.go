@@ -87,6 +87,9 @@ func MakeInstance(filename string) (*Instance, error) {
 	instance.Relay.RejectConnection = instance.RejectConnection
 	instance.Relay.PreventBroadcast = instance.PreventBroadcast
 
+  // Todo: when there's a new version of khatru
+	// instance.Relay.StartExpirationManager()
+
 	// HTTP request handling
 
 	router := instance.Relay.Router()
@@ -94,6 +97,8 @@ func MakeInstance(filename string) (*Instance, error) {
 	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "templates/index.html")
 	})
+
+	router.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
 	// Initialize stuff
 
