@@ -113,7 +113,7 @@ adduser zooid
 
 # Install system dependencies
 sudo apt update
-sudo apt install git
+apt install nginx git certbot python3-certbot-nginx sqlite3 gcc
 
 # Install go and add it to path
 wget -qO- https://go.dev/dl/go1.25.1.linux-amd64.tar.gz | sudo tar -C /usr/local -xzf -
@@ -124,7 +124,7 @@ su --login zooid
 
 # Clone the repository and build
 git clone https://github.com/coracle-social/zooid.git ~/zooid && cd zooid
-go build -o bin/zooid cmd/relay/main.go
+CGO_ENABLED=1 go build -o bin/zooid cmd/relay/main.go
 
 # Back to root
 exit
@@ -136,7 +136,15 @@ cp /home/zooid/zooid/zooid.service /etc/systemd/system/zooid.service
 systemctl enable zooid
 service zooid start
 
-# Next, optionally set up a reverse proxy and create a config file for each virtual relay
+# Set up nginx - be sure to edit the server_name to your domain
+cp /home/zooid/zooid/nginx.conf /etc/nginx/sites-available/zooid.conf
+ln -s /etc/nginx/sites-{available,enabled}/zooid.conf
+
+# Set up a SSL certificate - you'll need to verify and renew this manually
+certbot --nginx -d '*.yourdomain.com'
+
+# Enable the site and restart nginx
+service nginx restart
 ```
 
 ## Deploying via container

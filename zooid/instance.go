@@ -405,52 +405,60 @@ func (instance *Instance) OnRequest(ctx context.Context, filter nostr.Filter) (r
 
 func (instance *Instance) QueryStored(ctx context.Context, filter nostr.Filter) iter.Seq[nostr.Event] {
 	return func(yield func(nostr.Event) bool) {
-		pubkey, ok := khatru.GetAuthed(ctx)
+		if khatru.IsInternalCall(ctx) {
+  		for event := range instance.Events.QueryEvents(filter, 0) {
+  			if !yield(event) {
+  				return
+  			}
+  		}
+		} else {
+  		pubkey, isAuthed := khatru.GetAuthed(ctx)
 
-		if !ok {
-			log.Fatal("Unauthenticated user was allowed to query events")
-		}
+  		if !isAuthed {
+  			log.Panic("Unauthorized user was allowed to query events")
+  		}
 
-		stripSignature := func(event nostr.Event) nostr.Event {
-			if instance.Config.Policy.StripSignatures && !instance.Config.IsAdmin(pubkey) {
-				var zeroSig [64]byte
-				event.Sig = zeroSig
-			}
+  		stripSignature := func(event nostr.Event) nostr.Event {
+  			if instance.Config.Policy.StripSignatures && !instance.Config.IsAdmin(pubkey) {
+  				var zeroSig [64]byte
+  				event.Sig = zeroSig
+  			}
 
-			return event
-		}
+  			return event
+  		}
 
-		if slices.Contains(filter.Kinds, AUTH_INVITE) && instance.Config.CanInvite(pubkey) {
-			if !yield(stripSignature(instance.GenerateInviteEvent(pubkey))) {
-				return
-			}
-		}
+  		if slices.Contains(filter.Kinds, AUTH_INVITE) && instance.Config.CanInvite(pubkey) {
+  			if !yield(stripSignature(instance.GenerateInviteEvent(pubkey))) {
+  				return
+  			}
+  		}
 
-		for event := range instance.Events.QueryEvents(filter, 1000) {
-			// We save some ephemeral events for bookkeeping, don't return them
-			if event.Kind.IsEphemeral() {
-				continue
-			}
+  		for event := range instance.Events.QueryEvents(filter, 1000) {
+  			// We save some ephemeral events for bookkeeping, don't return them
+  			if event.Kind.IsEphemeral() {
+  				continue
+  			}
 
-			h := GetGroupIDFromEvent(event)
+  			h := GetGroupIDFromEvent(event)
 
-			if h != "" {
-				if !instance.Config.Groups.Enabled {
-					continue
-				}
+  			if h != "" {
+  				if !instance.Config.Groups.Enabled {
+  					continue
+  				}
 
-				if !instance.HasGroupAccess(h, pubkey) {
-					continue
-				}
-			}
+  				if !instance.HasGroupAccess(h, pubkey) {
+  					continue
+  				}
+  			}
 
-			if !instance.Config.Groups.Enabled && slices.Contains(nip29.MetadataEventKinds, event.Kind) {
-				continue
-			}
+  			if !instance.Config.Groups.Enabled && slices.Contains(nip29.MetadataEventKinds, event.Kind) {
+  				continue
+  			}
 
-			if !yield(event) {
-				return
-			}
+  			if !yield(event) {
+  				return
+  			}
+  		}
 		}
 	}
 }

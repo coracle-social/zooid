@@ -9,7 +9,7 @@ RUN go mod download
 COPY zooid zooid
 COPY cmd cmd
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o bin/zooid cmd/relay/main.go
+RUN CGO_ENABLED=1 GOOS=linux go build -o bin/zooid cmd/relay/main.go
 
 FROM gcr.io/distroless/base-debian12 AS run
 
