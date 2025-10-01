@@ -105,6 +105,40 @@ can_manage = true
 
 See `justfile` for defined commands.
 
+## Deployment
+
+```sh
+# Add a user
+adduser zooid
+
+# Install system dependencies
+sudo apt update
+sudo apt install git
+
+# Install go and add it to path
+wget -qO- https://go.dev/dl/go1.25.1.linux-amd64.tar.gz | sudo tar -C /usr/local -xzf -
+echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile
+
+# Log in as your user
+su --login zooid
+
+# Clone the repository and build
+git clone https://github.com/coracle-social/zooid.git ~/zooid && cd zooid
+go build -o bin/zooid cmd/relay/main.go
+
+# Back to root
+exit
+
+# Add a service file - edit if needed
+cp /home/zooid/zooid/zooid.service /etc/systemd/system/zooid.service
+
+# Start the service
+systemctl enable zooid
+service zooid start
+
+# Next, optionally set up a reverse proxy and create a config file for each virtual relay
+```
+
 ## TODO
 
 - [ ] Free up resources after instance inactivity
