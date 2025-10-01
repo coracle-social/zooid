@@ -136,12 +136,13 @@ cp /home/zooid/zooid/zooid.service /etc/systemd/system/zooid.service
 systemctl enable zooid
 service zooid start
 
+# Set up a SSL certificate
+# Use another method or --manual-auth-hook and --manual-cleanup-hook to automate renewal
+certbot certonly --manual -d '*.yourdomain.com' --preferred-challenges=dns
+
 # Set up nginx - be sure to edit the server_name to your domain
 cp /home/zooid/zooid/nginx.conf /etc/nginx/sites-available/zooid.conf
 ln -s /etc/nginx/sites-{available,enabled}/zooid.conf
-
-# Set up a SSL certificate - you'll need to verify and renew this manually
-certbot --nginx -d '*.yourdomain.com'
 
 # Enable the site and restart nginx
 service nginx restart
