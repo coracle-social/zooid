@@ -105,7 +105,7 @@ can_manage = true
 
 See `justfile` for defined commands.
 
-## Deployment
+## Deploying on ubuntu
 
 ```sh
 # Add a user
@@ -139,7 +139,16 @@ service zooid start
 # Next, optionally set up a reverse proxy and create a config file for each virtual relay
 ```
 
-## TODO
+## Deploying via container
 
-- [ ] Free up resources after instance inactivity
-- [ ] Admin/member lists
+Zooid can be run using an OCI container:
+
+```sh
+podman run -it \
+  -p 3334:3334 \
+  -v ./config:/tmp/config \
+  -v ./media:/tmp/media \
+  -v ./data:/tmp/data \
+  ghcr.io/coracle-social/zooid
+```
+
