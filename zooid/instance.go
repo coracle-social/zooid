@@ -476,7 +476,7 @@ func (instance *Instance) QueryStored(ctx context.Context, filter nostr.Filter) 
 					continue
 				}
 
-				if !yield(event) {
+				if !yield(stripSignature(event)) {
 					return
 				}
 			}
