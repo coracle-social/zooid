@@ -16,6 +16,8 @@ FROM gcr.io/distroless/base-debian12 AS run
 WORKDIR /
 
 COPY --from=build /app/bin/zooid /bin/zooid
+COPY templates /templates
+COPY static /static
 
 USER nonroot:nonroot
 
