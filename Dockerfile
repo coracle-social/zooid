@@ -21,8 +21,8 @@ USER nonroot:nonroot
 
 EXPOSE 3334
 
-ENV CONFIG=/tmp/config
-ENV MEDIA=/tmp/media
-ENV DATA=/tmp/data
+ENV CONFIG=/app/config
+ENV MEDIA=/app/media
+ENV DATA=/app/data
 
 ENTRYPOINT ["/bin/zooid"]

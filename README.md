@@ -111,59 +111,16 @@ can_manage = true
 
 See `justfile` for defined commands.
 
-## Deploying on ubuntu
-
-```sh
-# Add a user
-adduser zooid
-
-# Install system dependencies
-sudo apt update
-apt install nginx git certbot python3-certbot-nginx sqlite3 gcc
-
-# Install go and add it to path
-wget -qO- https://go.dev/dl/go1.25.1.linux-amd64.tar.gz | sudo tar -C /usr/local -xzf -
-echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile
-
-# Log in as your user
-su --login zooid
-
-# Clone the repository and build
-git clone https://github.com/coracle-social/zooid.git ~/zooid && cd ~/zooid
-CGO_ENABLED=1 go build -o bin/zooid cmd/relay/main.go
-
-# Back to root
-exit
-
-# Add a service file - edit if needed
-cp /home/zooid/zooid/zooid.service /etc/systemd/system/zooid.service
-
-# Start the service
-systemctl enable zooid
-service zooid start
-
-# Set up a SSL certificate
-# Use another method or --manual-auth-hook and --manual-cleanup-hook to automate renewal
-certbot certonly --manual -d '*.yourdomain.com' --preferred-challenges=dns
-
-# Set up nginx - be sure to edit the server_name to your domain
-cp /home/zooid/zooid/nginx.conf /etc/nginx/sites-available/zooid.conf
-ln -s /etc/nginx/sites-{available,enabled}/zooid.conf
-
-# Enable the site and restart nginx
-service nginx restart
-```
-
-## Deploying via container
+## Deploying
 
 Zooid can be run using an OCI container:
 
 ```sh
 podman run -it \
   -p 3334:3334 \
-  -v ./config:/tmp/config \
-  -v ./media:/tmp/media \
-  -v ./data:/tmp/data \
+  -v ./config:/app/config \
+  -v ./media:/app/media \
+  -v ./data:/app/data \
   ghcr.io/coracle-social/zooid
 ```
 
