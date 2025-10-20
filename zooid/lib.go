@@ -99,13 +99,22 @@ func Start() {
 					delete(instancesByName, filename)
 				}
 
-				instance, err := MakeInstance(filename)
-				if err != nil {
-					log.Printf("Failed to reload %s: %v", filename, err)
+				if event.Has(fsnotify.Remove) {
+					log.Printf("Unloaded %s", filename)
 				} else {
-					instancesByHost[instance.Config.Host] = instance
-					instancesByName[filename] = instance
-					log.Printf("Reloaded %v", filename)
+					instance, err := MakeInstance(filename)
+					if err != nil {
+						log.Printf("Failed to reload %s: %v", filename, err)
+					} else {
+						instancesByHost[instance.Config.Host] = instance
+						instancesByName[filename] = instance
+
+						if event.Has(fsnotify.Write) {
+							log.Printf("Reloaded %v", filename)
+						} else {
+							log.Printf("Loaded %v", filename)
+						}
+					}
 				}
 
 				instancesMux.Unlock()
