@@ -102,7 +102,7 @@ func TestInstance_HasAccess(t *testing.T) {
 
 	// Add a join event for the user (must be signed by the user)
 	joinEvent := nostr.Event{
-		Kind:      AUTH_JOIN,
+		Kind:      RELAY_JOIN,
 		CreatedAt: nostr.Now(),
 		PubKey:    userPubkey,
 		Tags:      nostr.Tags{{"claim", "test"}},
@@ -211,7 +211,7 @@ func TestInstance_AllowRecipientEvent(t *testing.T) {
 
 	// Add user access
 	joinEvent := nostr.Event{
-		Kind:      AUTH_JOIN,
+		Kind:      RELAY_JOIN,
 		CreatedAt: nostr.Now(),
 		PubKey:    userPubkey,
 		Tags:      nostr.Tags{{"claim", "test"}},
@@ -285,8 +285,8 @@ func TestInstance_GenerateInviteEvent(t *testing.T) {
 	inviteEvent := instance.GenerateInviteEvent(userPubkey)
 
 	// Test event properties
-	if inviteEvent.Kind != AUTH_INVITE {
-		t.Errorf("GenerateInviteEvent() kind = %v, want %v", inviteEvent.Kind, AUTH_INVITE)
+	if inviteEvent.Kind != RELAY_INVITE {
+		t.Errorf("GenerateInviteEvent() kind = %v, want %v", inviteEvent.Kind, RELAY_INVITE)
 	}
 
 	if inviteEvent.PubKey != instance.Config.Secret.Public() {
@@ -332,7 +332,7 @@ func TestInstance_OnJoinEvent(t *testing.T) {
 		{
 			name: "valid join event",
 			joinEvent: nostr.Event{
-				Kind: AUTH_JOIN,
+				Kind: RELAY_JOIN,
 				Tags: nostr.Tags{{"claim", claimTag[1]}},
 			},
 			wantReject: false,
@@ -341,7 +341,7 @@ func TestInstance_OnJoinEvent(t *testing.T) {
 		{
 			name: "join event without claim",
 			joinEvent: nostr.Event{
-				Kind: AUTH_JOIN,
+				Kind: RELAY_JOIN,
 				Tags: nostr.Tags{},
 			},
 			wantReject: true,
@@ -350,7 +350,7 @@ func TestInstance_OnJoinEvent(t *testing.T) {
 		{
 			name: "join event with invalid claim",
 			joinEvent: nostr.Event{
-				Kind: AUTH_JOIN,
+				Kind: RELAY_JOIN,
 				Tags: nostr.Tags{{"claim", "invalid-claim"}},
 			},
 			wantReject: true,
@@ -476,7 +476,7 @@ func TestInstance_HasAccess_WithBannedUser(t *testing.T) {
 
 	// Test banned user has no access even with join event
 	joinEvent := nostr.Event{
-		Kind:      AUTH_JOIN,
+		Kind:      RELAY_JOIN,
 		CreatedAt: nostr.Now(),
 		PubKey:    userPubkey,
 		Tags:      nostr.Tags{{"claim", "test"}},

@@ -8,12 +8,26 @@ import (
 	"fmt"
 )
 
+// Management store takes care of all nip 86 methods, as well as defining actions for internal use.
+//
+// The banned pubkeys list is a NIP 78 application-specific event, which keeps track of which pubkeys
+// have been banned, independently of the members list. Banned events works the same way.
+//
+// Membership is implemented as defined here https://github.com/nostr-protocol/nips/pull/1079/files, using
+// both membership lists and add/remove events.
+//
+// Actions like BanPubkey and AllowPubkey synchronize ban and membership lists. These should be called in most
+// cases, unless you're trying to do something more advanced.
+//
+// All actions are idempotent, and won't do anything if conditions are already correct.
+
 type ManagementStore struct {
+	Relay  *khatru.Relay
 	Config *Config
 	Events *EventStore
 }
 
-// Banned pubkeys
+// Internal banned pubkeys list
 
 func (m *ManagementStore) GetBannedPubkeyItems() []nip86.PubKeyReason {
 	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_PUBKEYS)
@@ -29,30 +43,135 @@ func (m *ManagementStore) GetBannedPubkeyItems() []nip86.PubKeyReason {
 	return items
 }
 
-func (m *ManagementStore) GetBannedPubkeys() []nostr.PubKey {
+func (m *ManagementStore) AddBannedPubkey(pubkey nostr.PubKey, reason string) error {
+	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_PUBKEYS)
+
+	if event.Tags.FindWithValue("pubkey", pubkey.Hex()) == nil {
+		event.Tags = append(event.Tags, nostr.Tag{"pubkey", pubkey.Hex(), reason})
+
+		if err := m.Events.SignAndSaveEvent(event, false); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *ManagementStore) RemoveBannedPubkey(pubkey nostr.PubKey) error {
+	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_PUBKEYS)
+
+	if event.Tags.FindWithValue("pubkey", pubkey.Hex()) != nil {
+		event.Tags = Filter(event.Tags, func(t nostr.Tag) bool {
+			return t[1] != pubkey.Hex()
+		})
+
+		if err := m.Events.SignAndSaveEvent(event, false); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Membership
+
+func (m *ManagementStore) GetMembers() []nostr.PubKey {
 	pubkeys := make([]nostr.PubKey, 0)
-	for _, item := range m.GetBannedPubkeyItems() {
-		pubkeys = append(pubkeys, item.PubKey)
+	for tag := range m.Events.GetOrCreateMemberList().Tags.FindAll("member") {
+		pubkey, err := nostr.PubKeyFromHex(tag[1])
+
+		if err == nil {
+			pubkeys = append(pubkeys, pubkey)
+		}
 	}
 
 	return pubkeys
 }
 
+func (m *ManagementStore) IsMember(pubkey nostr.PubKey) bool {
+	return m.Events.GetOrCreateMemberList().Tags.FindWithValue("member", pubkey.Hex()) != nil
+}
+
+func (m *ManagementStore) AddMember(pubkey nostr.PubKey) error {
+	membersEvent := m.Events.GetOrCreateMemberList()
+
+	if membersEvent.Tags.FindWithValue("member", pubkey.Hex()) == nil {
+		addMemberEvent := nostr.Event{
+			Kind:      RELAY_ADD_MEMBER,
+			CreatedAt: nostr.Now(),
+			Tags: nostr.Tags{
+				[]string{"-"},
+				[]string{"p", pubkey.Hex()},
+			},
+		}
+
+		if err := m.Events.SignAndSaveEvent(addMemberEvent, true); err != nil {
+			return err
+		}
+
+		membersEvent.Tags = append(membersEvent.Tags, nostr.Tag{"pubkey", pubkey.Hex()})
+
+		if err := m.Events.SignAndSaveEvent(membersEvent, true); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *ManagementStore) RemoveMember(pubkey nostr.PubKey) error {
+	membersEvent := m.Events.GetOrCreateMemberList()
+
+	if membersEvent.Tags.FindWithValue("member", pubkey.Hex()) != nil {
+		removeMemberEvent := nostr.Event{
+			Kind:      RELAY_REMOVE_MEMBER,
+			CreatedAt: nostr.Now(),
+			Tags: nostr.Tags{
+				[]string{"-"},
+				[]string{"p", pubkey.Hex()},
+			},
+		}
+
+		if err := m.Events.SignAndSaveEvent(removeMemberEvent, true); err != nil {
+			return err
+		}
+
+		membersEvent.Tags = Filter(membersEvent.Tags, func(t nostr.Tag) bool {
+			return t[1] != pubkey.Hex()
+		})
+
+		if err := m.Events.SignAndSaveEvent(membersEvent, true); err != nil {
+			return err
+		}
+
+	}
+
+	return nil
+}
+
+// Banning
+
 func (m *ManagementStore) BanPubkey(pubkey nostr.PubKey, reason string) error {
-	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_PUBKEYS)
-	event.Tags = append(event.Tags, nostr.Tag{"pubkey", pubkey.Hex(), reason})
+	if err := m.RemoveMember(pubkey); err != nil {
+		return err
+	}
 
-	return m.Events.SaveEvent(event)
+	if err := m.AddBannedPubkey(pubkey, reason); err != nil {
+		return err
+	}
+
+	filter := nostr.Filter{
+		Authors: []nostr.PubKey{pubkey},
+	}
+
+	for event := range m.Events.QueryEvents(filter, 0) {
+		m.Events.DeleteEvent(event.ID)
+	}
+
+	return nil
 }
 
-func (m *ManagementStore) PubkeyIsBanned(pubkey nostr.PubKey) bool {
-	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_PUBKEYS)
-	tag := event.Tags.FindWithValue("pubkey", pubkey.Hex())
-
-	return tag != nil
-}
-
-// Allowed pubkeys
+// Allowing
 
 func (m *ManagementStore) GetAllowedPubkeyItems() []nip86.PubKeyReason {
 	reasons := make([]nip86.PubKeyReason, 0)
@@ -71,47 +190,29 @@ func (m *ManagementStore) GetAllowedPubkeyItems() []nip86.PubKeyReason {
 		for _, pubkey := range role.Pubkeys {
 			reasons = append(reasons, nip86.PubKeyReason{
 				PubKey: nostr.MustPubKeyFromHex(pubkey),
-				Reason: fmt.Sprintf("assigned to role: %s", name),
+				Reason: fmt.Sprintf("assigned to %s role", name),
 			})
 		}
 	}
 
-	filter := nostr.Filter{
-		Kinds: []nostr.Kind{AUTH_JOIN},
-	}
+	for tag := range m.Events.GetOrCreateMemberList().Tags.FindAll("member") {
+		pubkey, err := nostr.PubKeyFromHex(tag[1])
 
-	for event := range m.Events.QueryEvents(filter, 0) {
-		reasons = append(
-			reasons,
-			nip86.PubKeyReason{
-				PubKey: event.PubKey,
-				Reason: "joined via invite code",
-			},
-		)
+		if err != nil {
+			reasons = append(
+				reasons,
+				nip86.PubKeyReason{
+					PubKey: pubkey,
+					Reason: "relay member",
+				},
+			)
+		}
 	}
 
 	return reasons
 }
 
-func (m *ManagementStore) GetAllowedPubkeys() []nostr.PubKey {
-	pubkeys := make([]nostr.PubKey, 0)
-	for _, item := range m.GetAllowedPubkeyItems() {
-		pubkeys = append(pubkeys, item.PubKey)
-	}
-
-	return pubkeys
-}
-
-func (m *ManagementStore) AllowPubkey(pubkey nostr.PubKey, reason string) error {
-	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_PUBKEYS)
-	event.Tags = Filter(event.Tags, func(t nostr.Tag) bool {
-		return t[1] != pubkey.Hex()
-	})
-
-	return m.Events.SaveEvent(event)
-}
-
-func (m *ManagementStore) PubkeyIsAllowed(pubkey nostr.PubKey) bool {
+func (m *ManagementStore) IsPubkeyAllowed(pubkey nostr.PubKey) bool {
 	if m.Config.IsOwner(pubkey) || m.Config.IsSelf(pubkey) {
 		return true
 	}
@@ -120,32 +221,32 @@ func (m *ManagementStore) PubkeyIsAllowed(pubkey nostr.PubKey) bool {
 		return true
 	}
 
-	filter := nostr.Filter{
-		Kinds:   []nostr.Kind{AUTH_JOIN},
-		Authors: []nostr.PubKey{pubkey},
+	return m.IsMember(pubkey)
+}
+
+func (m *ManagementStore) AllowPubkey(pubkey nostr.PubKey) error {
+	if m.IsPubkeyAllowed(pubkey) {
+		return nil
 	}
 
-	for range m.Events.QueryEvents(filter, 1) {
-		return true
+	if err := m.AddMember(pubkey); err != nil {
+		return err
 	}
 
-	return false
+	if err := m.RemoveBannedPubkey(pubkey); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Banned events
 
-type BannedEventItem struct {
-	ID     nostr.ID
-	Reason string
-}
-
-func (m *ManagementStore) GetBannedEventItems() []BannedEventItem {
-	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_EVENTS)
-
-	items := make([]BannedEventItem, 0)
-	for tag := range event.Tags.FindAll("event") {
-		items = append(items, BannedEventItem{
-			ID:     nostr.MustIDFromHex(tag[1]),
+func (m *ManagementStore) GetBannedEventItems() []nip86.IDReason {
+	items := make([]nip86.IDReason, 0)
+	for tag := range m.Events.GetOrCreateApplicationSpecificData(BANNED_EVENTS).Tags.FindAll("event") {
+		items = append(items, nip86.IDReason{
+			ID:     tag[1],
 			Reason: tag[2],
 		})
 	}
@@ -153,20 +254,15 @@ func (m *ManagementStore) GetBannedEventItems() []BannedEventItem {
 	return items
 }
 
-func (m *ManagementStore) GetBannedEvents() []nostr.ID {
-	ids := make([]nostr.ID, 0)
-	for _, item := range m.GetBannedEventItems() {
-		ids = append(ids, item.ID)
+func (m *ManagementStore) BanEvent(id nostr.ID, reason string) error {
+	if err := m.Events.DeleteEvent(id); err != nil {
+		return err
 	}
 
-	return ids
-}
-
-func (m *ManagementStore) BanEvent(id nostr.ID, reason string) error {
 	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_EVENTS)
 	event.Tags = append(event.Tags, nostr.Tag{"event", id.Hex(), reason})
 
-	return m.Events.SaveEvent(event)
+	return m.Events.SignAndSaveEvent(event, false)
 }
 
 func (m *ManagementStore) AllowEvent(id nostr.ID, reason string) error {
@@ -175,7 +271,7 @@ func (m *ManagementStore) AllowEvent(id nostr.ID, reason string) error {
 		return t[1] == id.Hex()
 	})
 
-	return m.Events.SaveEvent(event)
+	return m.Events.SignAndSaveEvent(event, false)
 }
 
 func (m *ManagementStore) EventIsBanned(id nostr.ID) bool {
@@ -199,19 +295,11 @@ func (m *ManagementStore) Enable(instance *Instance) {
 	}
 
 	instance.Relay.ManagementAPI.BanPubKey = func(ctx context.Context, pubkey nostr.PubKey, reason string) error {
-		filter := nostr.Filter{
-			Authors: []nostr.PubKey{pubkey},
-		}
-
-		for event := range instance.Events.QueryEvents(filter, 0) {
-			instance.Events.DeleteEvent(event.ID)
-		}
-
 		return m.BanPubkey(pubkey, reason)
 	}
 
 	instance.Relay.ManagementAPI.AllowPubKey = func(ctx context.Context, pubkey nostr.PubKey, reason string) error {
-		return m.AllowPubkey(pubkey, reason)
+		return m.AllowPubkey(pubkey)
 	}
 
 	instance.Relay.ManagementAPI.ListBannedPubKeys = func(ctx context.Context) ([]nip86.PubKeyReason, error) {
@@ -223,8 +311,6 @@ func (m *ManagementStore) Enable(instance *Instance) {
 	}
 
 	instance.Relay.ManagementAPI.BanEvent = func(ctx context.Context, id nostr.ID, reason string) error {
-		instance.Events.DeleteEvent(id)
-
 		return m.BanEvent(id, reason)
 	}
 
@@ -233,17 +319,6 @@ func (m *ManagementStore) Enable(instance *Instance) {
 	}
 
 	instance.Relay.ManagementAPI.ListBannedEvents = func(ctx context.Context) ([]nip86.IDReason, error) {
-		reasons := make([]nip86.IDReason, 0)
-		for _, item := range m.GetBannedEventItems() {
-			reasons = append(
-				reasons,
-				nip86.IDReason{
-					ID:     item.ID.Hex(),
-					Reason: item.Reason,
-				},
-			)
-		}
-
-		return reasons, nil
+		return m.GetBannedEventItems(), nil
 	}
 }

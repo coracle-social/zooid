@@ -5,15 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
-	"log"
 
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/eventstore"
+	"fiatjaf.com/nostr/khatru"
 	"github.com/Masterminds/squirrel"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 type EventStore struct {
+	Relay        *khatru.Relay
 	Config       *Config
 	Schema       *Schema
 	FTSAvailable bool
@@ -337,6 +338,22 @@ func (events *EventStore) CountEvents(filter nostr.Filter) (uint32, error) {
 
 // Non-eventstore methods
 
+func (events *EventStore) SignAndSaveEvent(event nostr.Event, broadcast bool) error {
+	if err := events.Config.Sign(&event); err != nil {
+		return err
+	}
+
+	if err := events.SaveEvent(event); err != nil {
+		return err
+	}
+
+	if broadcast {
+		events.Relay.BroadcastEvent(event)
+	}
+
+	return nil
+}
+
 func (events *EventStore) GetOrCreateApplicationSpecificData(d string) nostr.Event {
 	filter := nostr.Filter{
 		Kinds: []nostr.Kind{nostr.KindApplicationSpecificData},
@@ -349,19 +366,29 @@ func (events *EventStore) GetOrCreateApplicationSpecificData(d string) nostr.Eve
 		return event
 	}
 
-	event := nostr.Event{
+	return nostr.Event{
 		Kind:      nostr.KindApplicationSpecificData,
 		CreatedAt: nostr.Now(),
 		Tags: nostr.Tags{
 			[]string{"d", d},
 		},
 	}
+}
 
-	if err := events.Config.Sign(&event); err != nil {
-		log.Println("Failed to sign application specific event: %w", err)
+func (events *EventStore) GetOrCreateMemberList() nostr.Event {
+	filter := nostr.Filter{
+		Kinds: []nostr.Kind{RELAY_MEMBERS},
 	}
 
-	events.SaveEvent(event)
+	for event := range events.QueryEvents(filter, 1) {
+		return event
+	}
 
-	return event
+	return nostr.Event{
+		Kind:      nostr.KindApplicationSpecificData,
+		CreatedAt: nostr.Now(),
+		Tags: nostr.Tags{
+			[]string{"-"},
+		},
+	}
 }

@@ -7,10 +7,14 @@ import (
 )
 
 const (
-	AUTH_JOIN      = 28934
-	AUTH_INVITE    = 28935
-	BANNED_PUBKEYS = "zooid/banned_pubkeys"
-	BANNED_EVENTS  = "zooid/banned_events"
+	RELAY_ADD_MEMBER    = 8000
+	RELAY_REMOVE_MEMBER = 8001
+	RELAY_MEMBERS       = 13534
+	RELAY_JOIN          = 28934
+	RELAY_INVITE        = 28935
+	RELAY_LEAVE         = 28936
+	BANNED_PUBKEYS      = "zooid/banned_pubkeys"
+	BANNED_EVENTS       = "zooid/banned_events"
 )
 
 func First[T any](s []T) T {

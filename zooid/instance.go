@@ -9,18 +9,17 @@ import (
 	"strings"
 
 	"fiatjaf.com/nostr"
-	"fiatjaf.com/nostr/eventstore"
 	"fiatjaf.com/nostr/khatru"
 	"fiatjaf.com/nostr/nip29"
 	"github.com/gosimple/slug"
 )
 
 type Instance struct {
+	Relay      *khatru.Relay
 	Config     *Config
-	Events     eventstore.Store
+	Events     *EventStore
 	Blossom    *BlossomStore
 	Management *ManagementStore
-	Relay      *khatru.Relay
 }
 
 func MakeInstance(filename string) (*Instance, error) {
@@ -29,7 +28,10 @@ func MakeInstance(filename string) (*Instance, error) {
 		return nil, err
 	}
 
+	relay := khatru.NewRelay()
+
 	events := &EventStore{
+		Relay:  relay,
 		Config: config,
 		Schema: &Schema{
 			Name: slug.Make(config.Schema),
@@ -47,11 +49,11 @@ func MakeInstance(filename string) (*Instance, error) {
 	}
 
 	instance := &Instance{
+		Relay:      relay,
 		Config:     config,
 		Events:     events,
 		Blossom:    blossom,
 		Management: management,
-		Relay:      khatru.NewRelay(),
 	}
 
 	// NIP 11 info
@@ -127,10 +129,6 @@ func (instance *Instance) Cleanup() {
 
 // Utility methods
 
-func (instance *Instance) HasAccess(pubkey nostr.PubKey) bool {
-	return instance.Management.PubkeyIsAllowed(pubkey)
-}
-
 func (instance *Instance) IsGroupMember(id string, pubkey nostr.PubKey) bool {
 	filter := MakeGroupMembershipCheckFilter(id, pubkey)
 	events := instance.Events.QueryEvents(filter, 0)
@@ -177,7 +175,7 @@ func (instance *Instance) AllowRecipientEvent(event nostr.Event) bool {
 		if recipientTag != nil {
 			pubkey, err := nostr.PubKeyFromHex(recipientTag[1])
 
-			if err == nil && instance.HasAccess(pubkey) {
+			if err == nil && instance.Management.IsPubkeyAllowed(pubkey) {
 				return true
 			}
 		}
@@ -188,7 +186,7 @@ func (instance *Instance) AllowRecipientEvent(event nostr.Event) bool {
 
 func (instance *Instance) GenerateInviteEvent(pubkey nostr.PubKey) nostr.Event {
 	filter := nostr.Filter{
-		Kinds:   []nostr.Kind{AUTH_INVITE},
+		Kinds:   []nostr.Kind{RELAY_INVITE},
 		Authors: []nostr.PubKey{pubkey},
 	}
 
@@ -197,7 +195,7 @@ func (instance *Instance) GenerateInviteEvent(pubkey nostr.PubKey) nostr.Event {
 	}
 
 	event := nostr.Event{
-		Kind:      AUTH_INVITE,
+		Kind:      RELAY_INVITE,
 		CreatedAt: nostr.Now(),
 		Tags: nostr.Tags{
 			[]string{"claim", RandomString(8)},
@@ -205,12 +203,8 @@ func (instance *Instance) GenerateInviteEvent(pubkey nostr.PubKey) nostr.Event {
 		},
 	}
 
-	if err := instance.Config.Sign(&event); err != nil {
+	if err := instance.Events.SignAndSaveEvent(event, false); err != nil {
 		log.Printf("Failed to sign invite event: %v", err)
-	}
-
-	if err := instance.Events.SaveEvent(event); err != nil {
-		log.Printf("Failed to save invite event: %v", err)
 	}
 
 	return event
@@ -224,7 +218,7 @@ func (instance *Instance) OnJoinEvent(event nostr.Event) (reject bool, msg strin
 	}
 
 	filter := nostr.Filter{
-		Kinds: []nostr.Kind{AUTH_INVITE},
+		Kinds: []nostr.Kind{RELAY_INVITE},
 	}
 
 	for event := range instance.Events.QueryEvents(filter, 0) {
@@ -263,11 +257,11 @@ func (instance *Instance) OnEvent(ctx context.Context, event nostr.Event) (rejec
 		return true, "restricted: you cannot publish events on behalf of others"
 	}
 
-	if event.Kind == AUTH_JOIN {
+	if event.Kind == RELAY_JOIN {
 		return instance.OnJoinEvent(event)
 	}
 
-	if !instance.HasAccess(pubkey) {
+	if !instance.Management.IsPubkeyAllowed(pubkey) {
 		return true, "restricted: you are not a member of this relay"
 	}
 
@@ -350,15 +344,17 @@ func (instance *Instance) DeleteEvent(ctx context.Context, id nostr.ID) error {
 
 func (instance *Instance) OnEventSaved(ctx context.Context, event nostr.Event) {
 	addEvent := func(newEvent nostr.Event) {
-		if err := instance.Config.Sign(&newEvent); err != nil {
+		if err := instance.Events.SignAndSaveEvent(newEvent, true); err != nil {
 			log.Println(err)
-		} else {
-			if err := instance.Events.SaveEvent(newEvent); err != nil {
-				log.Println(err)
-			} else {
-				instance.Relay.BroadcastEvent(newEvent)
-			}
 		}
+	}
+
+	if event.Kind == RELAY_JOIN {
+		instance.Management.AllowPubkey(event.PubKey)
+	}
+
+	if event.Kind == RELAY_LEAVE {
+		instance.Management.BanPubkey(event.PubKey, "exited relay")
 	}
 
 	if event.Kind == nostr.KindSimpleGroupJoinRequest && instance.Config.Groups.AutoJoin {
@@ -392,7 +388,7 @@ func (instance *Instance) OnEventSaved(ctx context.Context, event nostr.Event) {
 }
 
 func (instance *Instance) OnEphemeralEvent(ctx context.Context, event nostr.Event) {
-	if slices.Contains([]nostr.Kind{AUTH_INVITE, AUTH_JOIN}, event.Kind) {
+	if slices.Contains([]nostr.Kind{RELAY_INVITE, RELAY_JOIN}, event.Kind) {
 		instance.Events.SaveEvent(event)
 	}
 }
@@ -404,7 +400,7 @@ func (instance *Instance) OnRequest(ctx context.Context, filter nostr.Filter) (r
 		return true, "auth-required: authentication is required for access"
 	}
 
-	if !instance.HasAccess(pubkey) {
+	if !instance.Management.IsPubkeyAllowed(pubkey) {
 		return true, "restricted: you are not a member of this relay"
 	}
 
@@ -435,7 +431,7 @@ func (instance *Instance) QueryStored(ctx context.Context, filter nostr.Filter) 
 				return event
 			}
 
-			if slices.Contains(filter.Kinds, AUTH_INVITE) && instance.Config.CanInvite(pubkey) {
+			if slices.Contains(filter.Kinds, RELAY_INVITE) && instance.Config.CanInvite(pubkey) {
 				if !yield(stripSignature(instance.GenerateInviteEvent(pubkey))) {
 					return
 				}
@@ -476,5 +472,5 @@ func (instance *Instance) RejectConnection(r *http.Request) bool {
 }
 
 func (instance *Instance) PreventBroadcast(ws *khatru.WebSocket, event nostr.Event) bool {
-	return event.Kind == AUTH_JOIN
+	return event.Kind == RELAY_JOIN
 }
