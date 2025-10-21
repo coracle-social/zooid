@@ -128,20 +128,7 @@ func (instance *Instance) Cleanup() {
 // Utility methods
 
 func (instance *Instance) HasAccess(pubkey nostr.PubKey) bool {
-	if instance.Config.IsAdmin(pubkey) {
-		return true
-	}
-
-	filter := nostr.Filter{
-		Kinds:   []nostr.Kind{AUTH_JOIN},
-		Authors: []nostr.PubKey{pubkey},
-	}
-
-	for range instance.Events.QueryEvents(filter, 1) {
-		return true
-	}
-
-	return false
+	return instance.Management.PubkeyIsAllowed(pubkey)
 }
 
 func (instance *Instance) IsGroupMember(id string, pubkey nostr.PubKey) bool {

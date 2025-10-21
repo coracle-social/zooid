@@ -15,18 +15,13 @@ type ManagementStore struct {
 
 // Banned pubkeys
 
-type BannedPubkeyItem struct {
-	Pubkey nostr.PubKey
-	Reason string
-}
-
-func (m *ManagementStore) GetBannedPubkeyItems() []BannedPubkeyItem {
+func (m *ManagementStore) GetBannedPubkeyItems() []nip86.PubKeyReason {
 	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_PUBKEYS)
 
-	items := make([]BannedPubkeyItem, 0)
+	items := make([]nip86.PubKeyReason, 0)
 	for tag := range event.Tags.FindAll("pubkey") {
-		items = append(items, BannedPubkeyItem{
-			Pubkey: nostr.MustPubKeyFromHex(tag[1]),
+		items = append(items, nip86.PubKeyReason{
+			PubKey: nostr.MustPubKeyFromHex(tag[1]),
 			Reason: tag[2],
 		})
 	}
@@ -37,7 +32,7 @@ func (m *ManagementStore) GetBannedPubkeyItems() []BannedPubkeyItem {
 func (m *ManagementStore) GetBannedPubkeys() []nostr.PubKey {
 	pubkeys := make([]nostr.PubKey, 0)
 	for _, item := range m.GetBannedPubkeyItems() {
-		pubkeys = append(pubkeys, item.Pubkey)
+		pubkeys = append(pubkeys, item.PubKey)
 	}
 
 	return pubkeys
@@ -50,6 +45,63 @@ func (m *ManagementStore) BanPubkey(pubkey nostr.PubKey, reason string) error {
 	return m.Events.SaveEvent(event)
 }
 
+func (m *ManagementStore) PubkeyIsBanned(pubkey nostr.PubKey) bool {
+	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_PUBKEYS)
+	tag := event.Tags.FindWithValue("pubkey", pubkey.Hex())
+
+	return tag != nil
+}
+
+// Allowed pubkeys
+
+func (m *ManagementStore) GetAllowedPubkeyItems() []nip86.PubKeyReason {
+	reasons := make([]nip86.PubKeyReason, 0)
+
+	reasons = append(reasons, nip86.PubKeyReason{
+		PubKey: nostr.MustPubKeyFromHex(m.Config.Info.Pubkey),
+		Reason: "relay owner",
+	})
+
+	reasons = append(reasons, nip86.PubKeyReason{
+		PubKey: m.Config.GetSelf(),
+		Reason: "relay self",
+	})
+
+	for name, role := range m.Config.Roles {
+		for _, pubkey := range role.Pubkeys {
+			reasons = append(reasons, nip86.PubKeyReason{
+				PubKey: nostr.MustPubKeyFromHex(pubkey),
+				Reason: fmt.Sprintf("assigned to role: %s", name),
+			})
+		}
+	}
+
+	filter := nostr.Filter{
+		Kinds: []nostr.Kind{AUTH_JOIN},
+	}
+
+	for event := range m.Events.QueryEvents(filter, 0) {
+		reasons = append(
+			reasons,
+			nip86.PubKeyReason{
+				PubKey: event.PubKey,
+				Reason: "joined via invite code",
+			},
+		)
+	}
+
+	return reasons
+}
+
+func (m *ManagementStore) GetAllowedPubkeys() []nostr.PubKey {
+	pubkeys := make([]nostr.PubKey, 0)
+	for _, item := range m.GetAllowedPubkeyItems() {
+		pubkeys = append(pubkeys, item.PubKey)
+	}
+
+	return pubkeys
+}
+
 func (m *ManagementStore) AllowPubkey(pubkey nostr.PubKey, reason string) error {
 	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_PUBKEYS)
 	event.Tags = Filter(event.Tags, func(t nostr.Tag) bool {
@@ -59,11 +111,25 @@ func (m *ManagementStore) AllowPubkey(pubkey nostr.PubKey, reason string) error 
 	return m.Events.SaveEvent(event)
 }
 
-func (m *ManagementStore) PubkeyIsBanned(pubkey nostr.PubKey) bool {
-	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_PUBKEYS)
-	tag := event.Tags.FindWithValue("pubkey", pubkey.Hex())
+func (m *ManagementStore) PubkeyIsAllowed(pubkey nostr.PubKey) bool {
+	if m.Config.IsOwner(pubkey) || m.Config.IsSelf(pubkey) {
+		return true
+	}
 
-	return tag != nil
+	for range m.Config.GetRolesForPubkey(pubkey) {
+		return true
+	}
+
+	filter := nostr.Filter{
+		Kinds:   []nostr.Kind{AUTH_JOIN},
+		Authors: []nostr.PubKey{pubkey},
+	}
+
+	for range m.Events.QueryEvents(filter, 1) {
+		return true
+	}
+
+	return false
 }
 
 // Banned events
@@ -149,57 +215,11 @@ func (m *ManagementStore) Enable(instance *Instance) {
 	}
 
 	instance.Relay.ManagementAPI.ListBannedPubKeys = func(ctx context.Context) ([]nip86.PubKeyReason, error) {
-		reasons := make([]nip86.PubKeyReason, 0)
-		for _, item := range m.GetBannedPubkeyItems() {
-			reasons = append(
-				reasons,
-				nip86.PubKeyReason{
-					PubKey: item.Pubkey,
-					Reason: item.Reason,
-				},
-			)
-		}
-
-		return reasons, nil
+		return m.GetBannedPubkeyItems(), nil
 	}
 
 	instance.Relay.ManagementAPI.ListAllowedPubKeys = func(ctx context.Context) ([]nip86.PubKeyReason, error) {
-		reasons := make([]nip86.PubKeyReason, 0)
-
-		reasons = append(reasons, nip86.PubKeyReason{
-			PubKey: nostr.MustPubKeyFromHex(m.Config.Info.Pubkey),
-			Reason: "relay owner",
-		})
-
-		reasons = append(reasons, nip86.PubKeyReason{
-			PubKey: m.Config.GetSelf(),
-			Reason: "relay self",
-		})
-
-		for name, role := range m.Config.Roles {
-			for _, pubkey := range role.Pubkeys {
-				reasons = append(reasons, nip86.PubKeyReason{
-					PubKey: nostr.MustPubKeyFromHex(pubkey),
-					Reason: fmt.Sprintf("assigned to role: %s", name),
-				})
-			}
-		}
-
-		filter := nostr.Filter{
-			Kinds: []nostr.Kind{AUTH_JOIN},
-		}
-
-		for event := range m.Events.QueryEvents(filter, 0) {
-			reasons = append(
-				reasons,
-				nip86.PubKeyReason{
-					PubKey: event.PubKey,
-					Reason: "joined via invite code",
-				},
-			)
-		}
-
-		return reasons, nil
+		return m.GetAllowedPubkeyItems(), nil
 	}
 
 	instance.Relay.ManagementAPI.BanEvent = func(ctx context.Context, id nostr.ID, reason string) error {
