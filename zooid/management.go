@@ -22,9 +22,49 @@ import (
 // All actions are idempotent, and won't do anything if conditions are already correct.
 
 type ManagementStore struct {
-	Relay  *khatru.Relay
 	Config *Config
 	Events *EventStore
+}
+
+// Banned events
+
+func (m *ManagementStore) GetBannedEventItems() []nip86.IDReason {
+	items := make([]nip86.IDReason, 0)
+	for tag := range m.Events.GetOrCreateApplicationSpecificData(BANNED_EVENTS).Tags.FindAll("event") {
+		items = append(items, nip86.IDReason{
+			ID:     tag[1],
+			Reason: tag[2],
+		})
+	}
+
+	return items
+}
+
+func (m *ManagementStore) BanEvent(id nostr.ID, reason string) error {
+	if err := m.Events.DeleteEvent(id); err != nil {
+		return err
+	}
+
+	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_EVENTS)
+	event.Tags = append(event.Tags, nostr.Tag{"event", id.Hex(), reason})
+
+	return m.Events.SignAndSaveEvent(event, false)
+}
+
+func (m *ManagementStore) AllowEvent(id nostr.ID, reason string) error {
+	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_EVENTS)
+	event.Tags = Filter(event.Tags, func(t nostr.Tag) bool {
+		return t[1] == id.Hex()
+	})
+
+	return m.Events.SignAndSaveEvent(event, false)
+}
+
+func (m *ManagementStore) EventIsBanned(id nostr.ID) bool {
+	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_EVENTS)
+	tag := event.Tags.FindWithValue("event", id.Hex())
+
+	return tag != nil
 }
 
 // Internal banned pubkeys list
@@ -71,6 +111,13 @@ func (m *ManagementStore) RemoveBannedPubkey(pubkey nostr.PubKey) error {
 	}
 
 	return nil
+}
+
+func (m *ManagementStore) PubkeyIsBanned(pubkey nostr.PubKey) bool {
+	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_PUBKEYS)
+	tag := event.Tags.FindWithValue("pubkey", pubkey.Hex())
+
+	return tag != nil
 }
 
 // Membership
@@ -240,45 +287,30 @@ func (m *ManagementStore) AllowPubkey(pubkey nostr.PubKey) error {
 	return nil
 }
 
-// Banned events
+// Joining
 
-func (m *ManagementStore) GetBannedEventItems() []nip86.IDReason {
-	items := make([]nip86.IDReason, 0)
-	for tag := range m.Events.GetOrCreateApplicationSpecificData(BANNED_EVENTS).Tags.FindAll("event") {
-		items = append(items, nip86.IDReason{
-			ID:     tag[1],
-			Reason: tag[2],
-		})
+func (m *ManagementStore) ValidateJoinRequest(event nostr.Event) (reject bool, err string) {
+	if m.PubkeyIsBanned(event.PubKey) {
+		return true, "invalid: you have been banned from this relay"
 	}
 
-	return items
-}
+	claimTag := event.Tags.Find("claim")
 
-func (m *ManagementStore) BanEvent(id nostr.ID, reason string) error {
-	if err := m.Events.DeleteEvent(id); err != nil {
-		return err
+	if claimTag == nil {
+		return true, "invalid: no claim tag"
 	}
 
-	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_EVENTS)
-	event.Tags = append(event.Tags, nostr.Tag{"event", id.Hex(), reason})
+	filter := nostr.Filter{
+		Kinds: []nostr.Kind{RELAY_INVITE},
+	}
 
-	return m.Events.SignAndSaveEvent(event, false)
-}
+	for event := range m.Events.QueryEvents(filter, 0) {
+		if event.Tags.FindWithValue("claim", claimTag[1]) != nil {
+			return false, ""
+		}
+	}
 
-func (m *ManagementStore) AllowEvent(id nostr.ID, reason string) error {
-	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_EVENTS)
-	event.Tags = Filter(event.Tags, func(t nostr.Tag) bool {
-		return t[1] == id.Hex()
-	})
-
-	return m.Events.SignAndSaveEvent(event, false)
-}
-
-func (m *ManagementStore) EventIsBanned(id nostr.ID) bool {
-	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_EVENTS)
-	tag := event.Tags.FindWithValue("event", id.Hex())
-
-	return tag != nil
+	return true, "invalid: failed to validate invite code"
 }
 
 // Middleware
