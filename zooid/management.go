@@ -48,7 +48,7 @@ func (m *ManagementStore) BanEvent(id nostr.ID, reason string) error {
 	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_EVENTS)
 	event.Tags = append(event.Tags, nostr.Tag{"event", id.Hex(), reason})
 
-	return m.Events.SignAndSaveEvent(event, false)
+	return m.Events.SignAndStoreEvent(event, false)
 }
 
 func (m *ManagementStore) AllowEvent(id nostr.ID, reason string) error {
@@ -57,7 +57,7 @@ func (m *ManagementStore) AllowEvent(id nostr.ID, reason string) error {
 		return t[1] == id.Hex()
 	})
 
-	return m.Events.SignAndSaveEvent(event, false)
+	return m.Events.SignAndStoreEvent(event, false)
 }
 
 func (m *ManagementStore) EventIsBanned(id nostr.ID) bool {
@@ -73,7 +73,7 @@ func (m *ManagementStore) GetBannedPubkeyItems() []nip86.PubKeyReason {
 	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_PUBKEYS)
 
 	items := make([]nip86.PubKeyReason, 0)
-	for tag := range event.Tags.FindAll("pubkey") {
+	for tag := range event.Tags.FindAll("banned") {
 		items = append(items, nip86.PubKeyReason{
 			PubKey: nostr.MustPubKeyFromHex(tag[1]),
 			Reason: tag[2],
@@ -86,10 +86,10 @@ func (m *ManagementStore) GetBannedPubkeyItems() []nip86.PubKeyReason {
 func (m *ManagementStore) AddBannedPubkey(pubkey nostr.PubKey, reason string) error {
 	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_PUBKEYS)
 
-	if event.Tags.FindWithValue("pubkey", pubkey.Hex()) == nil {
-		event.Tags = append(event.Tags, nostr.Tag{"pubkey", pubkey.Hex(), reason})
+	if event.Tags.FindWithValue("banned", pubkey.Hex()) == nil {
+		event.Tags = append(event.Tags, nostr.Tag{"banned", pubkey.Hex(), reason})
 
-		if err := m.Events.SignAndSaveEvent(event, false); err != nil {
+		if err := m.Events.SignAndStoreEvent(event, false); err != nil {
 			return err
 		}
 	}
@@ -100,12 +100,12 @@ func (m *ManagementStore) AddBannedPubkey(pubkey nostr.PubKey, reason string) er
 func (m *ManagementStore) RemoveBannedPubkey(pubkey nostr.PubKey) error {
 	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_PUBKEYS)
 
-	if event.Tags.FindWithValue("pubkey", pubkey.Hex()) != nil {
+	if event.Tags.FindWithValue("banned", pubkey.Hex()) != nil {
 		event.Tags = Filter(event.Tags, func(t nostr.Tag) bool {
-			return t[1] != pubkey.Hex()
+			return len(t) >= 2 && t[1] != pubkey.Hex()
 		})
 
-		if err := m.Events.SignAndSaveEvent(event, false); err != nil {
+		if err := m.Events.SignAndStoreEvent(event, false); err != nil {
 			return err
 		}
 	}
@@ -115,7 +115,7 @@ func (m *ManagementStore) RemoveBannedPubkey(pubkey nostr.PubKey) error {
 
 func (m *ManagementStore) PubkeyIsBanned(pubkey nostr.PubKey) bool {
 	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_PUBKEYS)
-	tag := event.Tags.FindWithValue("pubkey", pubkey.Hex())
+	tag := event.Tags.FindWithValue("banned", pubkey.Hex())
 
 	return tag != nil
 }
@@ -152,13 +152,13 @@ func (m *ManagementStore) AddMember(pubkey nostr.PubKey) error {
 			},
 		}
 
-		if err := m.Events.SignAndSaveEvent(addMemberEvent, true); err != nil {
+		if err := m.Events.SignAndStoreEvent(addMemberEvent, true); err != nil {
 			return err
 		}
 
-		membersEvent.Tags = append(membersEvent.Tags, nostr.Tag{"pubkey", pubkey.Hex()})
+		membersEvent.Tags = append(membersEvent.Tags, nostr.Tag{"member", pubkey.Hex()})
 
-		if err := m.Events.SignAndSaveEvent(membersEvent, true); err != nil {
+		if err := m.Events.SignAndStoreEvent(membersEvent, true); err != nil {
 			return err
 		}
 	}
@@ -179,15 +179,15 @@ func (m *ManagementStore) RemoveMember(pubkey nostr.PubKey) error {
 			},
 		}
 
-		if err := m.Events.SignAndSaveEvent(removeMemberEvent, true); err != nil {
+		if err := m.Events.SignAndStoreEvent(removeMemberEvent, true); err != nil {
 			return err
 		}
 
 		membersEvent.Tags = Filter(membersEvent.Tags, func(t nostr.Tag) bool {
-			return t[1] != pubkey.Hex()
+			return len(t) >= 2 && t[1] != pubkey.Hex()
 		})
 
-		if err := m.Events.SignAndSaveEvent(membersEvent, true); err != nil {
+		if err := m.Events.SignAndStoreEvent(membersEvent, true); err != nil {
 			return err
 		}
 

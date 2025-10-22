@@ -34,7 +34,7 @@ func main() {
 	}
 
 	go func() {
-		fmt.Printf("running on :%s\n", port)
+		log.Printf("running on :%s\n", port)
 		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 			log.Printf("HTTP server error: %v\n", err)
 		}
@@ -44,7 +44,7 @@ func main() {
 
 	<-shutdown
 
-	fmt.Println("\nShutting down gracefully...")
+	log.Println("\nShutting down gracefully...")
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()

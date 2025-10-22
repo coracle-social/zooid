@@ -338,12 +338,24 @@ func (events *EventStore) CountEvents(filter nostr.Filter) (uint32, error) {
 
 // Non-eventstore methods
 
-func (events *EventStore) SignAndSaveEvent(event nostr.Event, broadcast bool) error {
+func (events *EventStore) StoreEvent(event nostr.Event) error {
+	if event.Kind.IsRegular() {
+		if err := events.SaveEvent(event); err != nil && err != eventstore.ErrDupEvent {
+			return err
+		}
+
+		return nil
+	}
+
+	return events.ReplaceEvent(event)
+}
+
+func (events *EventStore) SignAndStoreEvent(event nostr.Event, broadcast bool) error {
 	if err := events.Config.Sign(&event); err != nil {
 		return err
 	}
 
-	if err := events.SaveEvent(event); err != nil {
+	if err := events.StoreEvent(event); err != nil {
 		return err
 	}
 
@@ -385,7 +397,7 @@ func (events *EventStore) GetOrCreateMemberList() nostr.Event {
 	}
 
 	return nostr.Event{
-		Kind:      nostr.KindApplicationSpecificData,
+		Kind:      RELAY_MEMBERS,
 		CreatedAt: nostr.Now(),
 		Tags: nostr.Tags{
 			[]string{"-"},

@@ -93,10 +93,11 @@ func MakeInstance(filename string) (*Instance, error) {
 	instance.Relay.StoreEvent = instance.StoreEvent
 	instance.Relay.ReplaceEvent = instance.ReplaceEvent
 	instance.Relay.DeleteEvent = instance.DeleteEvent
-	instance.Relay.OnEvent = instance.OnEvent
-	instance.Relay.OnEventSaved = instance.OnEventSaved
 	instance.Relay.OnRequest = instance.OnRequest
 	instance.Relay.QueryStored = instance.QueryStored
+	instance.Relay.OnEvent = instance.OnEvent
+	instance.Relay.OnEventSaved = instance.OnEventSaved
+	instance.Relay.OnEphemeralEvent = instance.OnEphemeralEvent
 
 	// Todo: when there's a new version of khatru
 	// instance.Relay.StartExpirationManager()
@@ -181,10 +182,6 @@ func (instance *Instance) IsInternalEvent(event nostr.Event) bool {
 }
 
 func (instance *Instance) IsReadOnlyEvent(event nostr.Event) bool {
-	if instance.IsInternalEvent(event) {
-		return true
-	}
-
 	readOnlyEventKinds := []nostr.Kind{
 		RELAY_ADD_MEMBER,
 		RELAY_REMOVE_MEMBER,
@@ -222,7 +219,7 @@ func (instance *Instance) GenerateInviteEvent(pubkey nostr.PubKey) nostr.Event {
 		},
 	}
 
-	if err := instance.Events.SignAndSaveEvent(event, false); err != nil {
+	if err := instance.Events.SignAndStoreEvent(event, false); err != nil {
 		log.Printf("Failed to sign invite event: %v", err)
 	}
 
@@ -240,7 +237,7 @@ func (instance *Instance) PreventBroadcast(ws *khatru.WebSocket, event nostr.Eve
 }
 
 func (instance *Instance) StoreEvent(ctx context.Context, event nostr.Event) error {
-	return instance.Events.SaveEvent(event)
+	return instance.Events.StoreEvent(event)
 }
 
 func (instance *Instance) ReplaceEvent(ctx context.Context, event nostr.Event) error {
@@ -285,6 +282,10 @@ func (instance *Instance) QueryStored(ctx context.Context, filter nostr.Filter) 
 			}
 
 			for event := range instance.Events.QueryEvents(filter, 1000) {
+				if instance.IsInternalEvent(event) {
+					continue
+				}
+
 				if instance.IsWriteOnlyEvent(event) {
 					continue
 				}
@@ -334,6 +335,10 @@ func (instance *Instance) OnEvent(ctx context.Context, event nostr.Event) (rejec
 
 	if !instance.Management.HasAccess(pubkey) {
 		return true, "restricted: you are not a member of this relay"
+	}
+
+	if instance.IsInternalEvent(event) {
+		return true, "invalid: this event's kind is not accepted"
 	}
 
 	if instance.IsReadOnlyEvent(event) {
@@ -402,14 +407,6 @@ func (instance *Instance) OnEvent(ctx context.Context, event nostr.Event) (rejec
 }
 
 func (instance *Instance) OnEventSaved(ctx context.Context, event nostr.Event) {
-	if event.Kind == RELAY_JOIN {
-		instance.Management.AllowPubkey(event.PubKey)
-	}
-
-	if event.Kind == RELAY_LEAVE {
-		instance.Management.BanPubkey(event.PubKey, "exited relay")
-	}
-
 	if event.Kind == nostr.KindSimpleGroupJoinRequest && instance.Config.Groups.AutoJoin {
 		h := GetGroupIDFromEvent(event)
 		meta := instance.Groups.GetMetadata(h)
@@ -429,5 +426,15 @@ func (instance *Instance) OnEventSaved(ctx context.Context, event nostr.Event) {
 
 	if event.Kind == nostr.KindSimpleGroupDeleteGroup {
 		instance.Groups.DeleteGroup(GetGroupIDFromEvent(event))
+	}
+}
+
+func (instance *Instance) OnEphemeralEvent(ctx context.Context, event nostr.Event) {
+	if event.Kind == RELAY_JOIN {
+		instance.Management.AllowPubkey(event.PubKey)
+	}
+
+	if event.Kind == RELAY_LEAVE {
+		instance.Management.BanPubkey(event.PubKey, "exited relay")
 	}
 }
