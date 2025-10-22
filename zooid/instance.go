@@ -137,7 +137,7 @@ func (instance *Instance) Cleanup() {
 func (instance *Instance) StripSignature(ctx context.Context, event nostr.Event) nostr.Event {
 	pubkey, _ := khatru.GetAuthed(ctx)
 
-	if instance.Config.Policy.StripSignatures && !instance.Config.IsAdmin(pubkey) {
+	if instance.Config.Policy.StripSignatures && !instance.Config.CanManage(pubkey) {
 		var zeroSig [64]byte
 		event.Sig = zeroSig
 	}
@@ -159,7 +159,7 @@ func (instance *Instance) AllowRecipientEvent(event nostr.Event) bool {
 		if recipientTag != nil {
 			pubkey, err := nostr.PubKeyFromHex(recipientTag[1])
 
-			if err == nil && instance.Management.IsPubkeyAllowed(pubkey) {
+			if err == nil && instance.Management.HasAccess(pubkey) {
 				return true
 			}
 		}
@@ -251,6 +251,68 @@ func (instance *Instance) DeleteEvent(ctx context.Context, id nostr.ID) error {
 	return instance.Events.DeleteEvent(id)
 }
 
+// Requests
+
+func (instance *Instance) OnRequest(ctx context.Context, filter nostr.Filter) (reject bool, msg string) {
+	pubkey, ok := khatru.GetAuthed(ctx)
+
+	if !ok {
+		return true, "auth-required: authentication is required for access"
+	}
+
+	if !instance.Management.HasAccess(pubkey) {
+		return true, "restricted: you are not a member of this relay"
+	}
+
+	return false, ""
+}
+
+func (instance *Instance) QueryStored(ctx context.Context, filter nostr.Filter) iter.Seq[nostr.Event] {
+	return func(yield func(nostr.Event) bool) {
+		if khatru.IsInternalCall(ctx) {
+			for event := range instance.Events.QueryEvents(filter, 0) {
+				if !yield(event) {
+					return
+				}
+			}
+		} else {
+			pubkey, _ := khatru.GetAuthed(ctx)
+
+			if slices.Contains(filter.Kinds, RELAY_INVITE) && instance.Config.CanInvite(pubkey) {
+				if !yield(instance.StripSignature(ctx, instance.GenerateInviteEvent(pubkey))) {
+					return
+				}
+			}
+
+			for event := range instance.Events.QueryEvents(filter, 1000) {
+				if instance.IsWriteOnlyEvent(event) {
+					continue
+				}
+
+				h := GetGroupIDFromEvent(event)
+
+				if h != "" {
+					if !instance.Config.Groups.Enabled {
+						continue
+					}
+
+					if !instance.Groups.HasAccess(h, pubkey) {
+						continue
+					}
+				}
+
+				if !instance.Config.Groups.Enabled && slices.Contains(nip29.MetadataEventKinds, event.Kind) {
+					continue
+				}
+
+				if !yield(instance.StripSignature(ctx, event)) {
+					return
+				}
+			}
+		}
+	}
+}
+
 // Event publishing
 
 func (instance *Instance) OnEvent(ctx context.Context, event nostr.Event) (reject bool, msg string) {
@@ -270,7 +332,7 @@ func (instance *Instance) OnEvent(ctx context.Context, event nostr.Event) (rejec
 		return instance.Management.ValidateJoinRequest(event)
 	}
 
-	if !instance.Management.IsPubkeyAllowed(pubkey) {
+	if !instance.Management.HasAccess(pubkey) {
 		return true, "restricted: you are not a member of this relay"
 	}
 
@@ -282,7 +344,7 @@ func (instance *Instance) OnEvent(ctx context.Context, event nostr.Event) (rejec
 		return true, "invalid: group metadata cannot be set directly"
 	}
 
-	if slices.Contains(nip29.ModerationEventKinds, event.Kind) && !instance.Config.IsAdmin(event.PubKey) {
+	if slices.Contains(nip29.ModerationEventKinds, event.Kind) && !instance.Config.CanManage(event.PubKey) {
 		return true, "restricted: you are not authorized to manage groups"
 	}
 
@@ -367,67 +429,5 @@ func (instance *Instance) OnEventSaved(ctx context.Context, event nostr.Event) {
 
 	if event.Kind == nostr.KindSimpleGroupDeleteGroup {
 		instance.Groups.DeleteGroup(GetGroupIDFromEvent(event))
-	}
-}
-
-// Requests
-
-func (instance *Instance) OnRequest(ctx context.Context, filter nostr.Filter) (reject bool, msg string) {
-	pubkey, ok := khatru.GetAuthed(ctx)
-
-	if !ok {
-		return true, "auth-required: authentication is required for access"
-	}
-
-	if !instance.Management.IsPubkeyAllowed(pubkey) {
-		return true, "restricted: you are not a member of this relay"
-	}
-
-	return false, ""
-}
-
-func (instance *Instance) QueryStored(ctx context.Context, filter nostr.Filter) iter.Seq[nostr.Event] {
-	return func(yield func(nostr.Event) bool) {
-		if khatru.IsInternalCall(ctx) {
-			for event := range instance.Events.QueryEvents(filter, 0) {
-				if !yield(event) {
-					return
-				}
-			}
-		} else {
-			pubkey, _ := khatru.GetAuthed(ctx)
-
-			if slices.Contains(filter.Kinds, RELAY_INVITE) && instance.Config.CanInvite(pubkey) {
-				if !yield(instance.StripSignature(ctx, instance.GenerateInviteEvent(pubkey))) {
-					return
-				}
-			}
-
-			for event := range instance.Events.QueryEvents(filter, 1000) {
-				if instance.IsWriteOnlyEvent(event) {
-					continue
-				}
-
-				h := GetGroupIDFromEvent(event)
-
-				if h != "" {
-					if !instance.Config.Groups.Enabled {
-						continue
-					}
-
-					if !instance.Groups.HasAccess(h, pubkey) {
-						continue
-					}
-				}
-
-				if !instance.Config.Groups.Enabled && slices.Contains(nip29.MetadataEventKinds, event.Kind) {
-					continue
-				}
-
-				if !yield(instance.StripSignature(ctx, event)) {
-					return
-				}
-			}
-		}
 	}
 }

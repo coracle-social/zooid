@@ -95,13 +95,13 @@ func (config *Config) IsOwner(pubkey nostr.PubKey) bool {
 	return pubkey.Hex() == config.Info.Pubkey
 }
 
-func (config *Config) GetRolesForPubkey(pubkey nostr.PubKey) []Role {
-	roles := make([]Role, 0)
-	for name, role := range config.Roles {
-		if name == "member" {
-			roles = append(roles, role)
-		}
+func (config *Config) IsAdmin(pubkey nostr.PubKey) bool {
+	return config.IsOwner(pubkey) || config.IsSelf(pubkey)
+}
 
+func (config *Config) GetAssignedRoles(pubkey nostr.PubKey) []Role {
+	roles := make([]Role, 0)
+	for _, role := range config.Roles {
 		if slices.Contains(role.Pubkeys, pubkey.Hex()) {
 			roles = append(roles, role)
 		}
@@ -110,18 +110,25 @@ func (config *Config) GetRolesForPubkey(pubkey nostr.PubKey) []Role {
 	return roles
 }
 
-func (config *Config) CanManage(pubkey nostr.PubKey) bool {
-	for _, role := range config.GetRolesForPubkey(pubkey) {
-		if role.CanManage {
-			return true
+func (config *Config) GetAllRoles(pubkey nostr.PubKey) []Role {
+	roles := make([]Role, 0)
+	for name, role := range config.Roles {
+		if name == "member" {
+			roles = append(roles, role)
+		} else if slices.Contains(role.Pubkeys, pubkey.Hex()) {
+			roles = append(roles, role)
 		}
 	}
 
-	return false
+	return roles
 }
 
 func (config *Config) CanInvite(pubkey nostr.PubKey) bool {
-	for _, role := range config.GetRolesForPubkey(pubkey) {
+	if config.IsAdmin(pubkey) {
+		return true
+	}
+
+	for _, role := range config.GetAllRoles(pubkey) {
 		if role.CanInvite {
 			return true
 		}
@@ -130,17 +137,15 @@ func (config *Config) CanInvite(pubkey nostr.PubKey) bool {
 	return false
 }
 
-func (config *Config) IsAdmin(pubkey nostr.PubKey) bool {
-	if config.IsOwner(pubkey) {
+func (config *Config) CanManage(pubkey nostr.PubKey) bool {
+	if config.IsAdmin(pubkey) {
 		return true
 	}
 
-	if config.IsSelf(pubkey) {
-		return true
-	}
-
-	if config.CanManage(pubkey) {
-		return true
+	for _, role := range config.GetAllRoles(pubkey) {
+		if role.CanManage {
+			return true
+		}
 	}
 
 	return false

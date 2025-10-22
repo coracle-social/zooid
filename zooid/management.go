@@ -259,20 +259,8 @@ func (m *ManagementStore) GetAllowedPubkeyItems() []nip86.PubKeyReason {
 	return reasons
 }
 
-func (m *ManagementStore) IsPubkeyAllowed(pubkey nostr.PubKey) bool {
-	if m.Config.IsOwner(pubkey) || m.Config.IsSelf(pubkey) {
-		return true
-	}
-
-	for range m.Config.GetRolesForPubkey(pubkey) {
-		return true
-	}
-
-	return m.IsMember(pubkey)
-}
-
 func (m *ManagementStore) AllowPubkey(pubkey nostr.PubKey) error {
-	if m.IsPubkeyAllowed(pubkey) {
+	if m.HasAccess(pubkey) {
 		return nil
 	}
 
@@ -285,6 +273,18 @@ func (m *ManagementStore) AllowPubkey(pubkey nostr.PubKey) error {
 	}
 
 	return nil
+}
+
+func (m *ManagementStore) HasAccess(pubkey nostr.PubKey) bool {
+	if m.Config.IsAdmin(pubkey) {
+		return true
+	}
+
+	for range m.Config.GetAssignedRoles(pubkey) {
+		return true
+	}
+
+	return m.IsMember(pubkey)
 }
 
 // Joining
@@ -319,7 +319,15 @@ func (m *ManagementStore) Enable(instance *Instance) {
 	instance.Relay.ManagementAPI.OnAPICall = func(ctx context.Context, mp nip86.MethodParams) (reject bool, msg string) {
 		pubkey, ok := khatru.GetAuthed(ctx)
 
-		if ok && m.Config.CanManage(pubkey) {
+		if !ok {
+			return true, "blocked: please authenticate in order to manage this relay"
+		}
+
+		if !m.HasAccess(pubkey) {
+			return true, "blocked: you are not a member of this relay"
+		}
+
+		if !m.Config.CanManage(pubkey) {
 			return true, "blocked: only relay admins can manage this relay."
 		}
 
