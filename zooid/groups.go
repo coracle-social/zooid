@@ -44,7 +44,7 @@ func (g *GroupStore) AddMember(h string, pubkey nostr.PubKey) error {
 		},
 	}
 
-	return g.Events.SignAndStoreEvent(event, true)
+	return g.Events.SignAndStoreEvent(&event, true)
 }
 
 func (g *GroupStore) RemoveMember(h string, pubkey nostr.PubKey) error {
@@ -57,7 +57,7 @@ func (g *GroupStore) RemoveMember(h string, pubkey nostr.PubKey) error {
 		},
 	}
 
-	return g.Events.SignAndStoreEvent(event, true)
+	return g.Events.SignAndStoreEvent(&event, true)
 }
 
 func (g *GroupStore) SetMetadataFromEvent(event nostr.Event) error {
@@ -77,7 +77,7 @@ func (g *GroupStore) SetMetadataFromEvent(event nostr.Event) error {
 		Tags:      tags,
 	}
 
-	return g.Events.SignAndStoreEvent(metadataEvent, true)
+	return g.Events.SignAndStoreEvent(&metadataEvent, true)
 }
 
 func (g *GroupStore) DeleteGroup(h string) {

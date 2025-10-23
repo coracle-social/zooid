@@ -219,7 +219,7 @@ func (instance *Instance) GenerateInviteEvent(pubkey nostr.PubKey) nostr.Event {
 		},
 	}
 
-	if err := instance.Events.SignAndStoreEvent(event, false); err != nil {
+	if err := instance.Events.SignAndStoreEvent(&event, false); err != nil {
 		log.Printf("Failed to sign invite event: %v", err)
 	}
 
@@ -282,6 +282,10 @@ func (instance *Instance) QueryStored(ctx context.Context, filter nostr.Filter) 
 			}
 
 			for event := range instance.Events.QueryEvents(filter, 1000) {
+				if event.Kind == RELAY_INVITE {
+					continue
+				}
+
 				if instance.IsInternalEvent(event) {
 					continue
 				}

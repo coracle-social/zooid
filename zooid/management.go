@@ -48,7 +48,7 @@ func (m *ManagementStore) BanEvent(id nostr.ID, reason string) error {
 	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_EVENTS)
 	event.Tags = append(event.Tags, nostr.Tag{"event", id.Hex(), reason})
 
-	return m.Events.SignAndStoreEvent(event, false)
+	return m.Events.SignAndStoreEvent(&event, false)
 }
 
 func (m *ManagementStore) AllowEvent(id nostr.ID, reason string) error {
@@ -57,7 +57,7 @@ func (m *ManagementStore) AllowEvent(id nostr.ID, reason string) error {
 		return t[1] == id.Hex()
 	})
 
-	return m.Events.SignAndStoreEvent(event, false)
+	return m.Events.SignAndStoreEvent(&event, false)
 }
 
 func (m *ManagementStore) EventIsBanned(id nostr.ID) bool {
@@ -89,7 +89,7 @@ func (m *ManagementStore) AddBannedPubkey(pubkey nostr.PubKey, reason string) er
 	if event.Tags.FindWithValue("banned", pubkey.Hex()) == nil {
 		event.Tags = append(event.Tags, nostr.Tag{"banned", pubkey.Hex(), reason})
 
-		if err := m.Events.SignAndStoreEvent(event, false); err != nil {
+		if err := m.Events.SignAndStoreEvent(&event, false); err != nil {
 			return err
 		}
 	}
@@ -105,7 +105,7 @@ func (m *ManagementStore) RemoveBannedPubkey(pubkey nostr.PubKey) error {
 			return len(t) >= 2 && t[1] != pubkey.Hex()
 		})
 
-		if err := m.Events.SignAndStoreEvent(event, false); err != nil {
+		if err := m.Events.SignAndStoreEvent(&event, false); err != nil {
 			return err
 		}
 	}
@@ -152,13 +152,13 @@ func (m *ManagementStore) AddMember(pubkey nostr.PubKey) error {
 			},
 		}
 
-		if err := m.Events.SignAndStoreEvent(addMemberEvent, true); err != nil {
+		if err := m.Events.SignAndStoreEvent(&addMemberEvent, true); err != nil {
 			return err
 		}
 
 		membersEvent.Tags = append(membersEvent.Tags, nostr.Tag{"member", pubkey.Hex()})
 
-		if err := m.Events.SignAndStoreEvent(membersEvent, true); err != nil {
+		if err := m.Events.SignAndStoreEvent(&membersEvent, true); err != nil {
 			return err
 		}
 	}
@@ -179,7 +179,7 @@ func (m *ManagementStore) RemoveMember(pubkey nostr.PubKey) error {
 			},
 		}
 
-		if err := m.Events.SignAndStoreEvent(removeMemberEvent, true); err != nil {
+		if err := m.Events.SignAndStoreEvent(&removeMemberEvent, true); err != nil {
 			return err
 		}
 
@@ -187,7 +187,7 @@ func (m *ManagementStore) RemoveMember(pubkey nostr.PubKey) error {
 			return len(t) >= 2 && t[1] != pubkey.Hex()
 		})
 
-		if err := m.Events.SignAndStoreEvent(membersEvent, true); err != nil {
+		if err := m.Events.SignAndStoreEvent(&membersEvent, true); err != nil {
 			return err
 		}
 

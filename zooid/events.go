@@ -350,17 +350,17 @@ func (events *EventStore) StoreEvent(event nostr.Event) error {
 	return events.ReplaceEvent(event)
 }
 
-func (events *EventStore) SignAndStoreEvent(event nostr.Event, broadcast bool) error {
-	if err := events.Config.Sign(&event); err != nil {
+func (events *EventStore) SignAndStoreEvent(event *nostr.Event, broadcast bool) error {
+	if err := events.Config.Sign(event); err != nil {
 		return err
 	}
 
-	if err := events.StoreEvent(event); err != nil {
+	if err := events.StoreEvent(*event); err != nil {
 		return err
 	}
 
 	if broadcast {
-		events.Relay.BroadcastEvent(event)
+		events.Relay.BroadcastEvent(*event)
 	}
 
 	return nil

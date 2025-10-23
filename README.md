@@ -76,12 +76,12 @@ The below config file might be saved as `./config/my-relay.example.com` in order
 ```toml
 host = "my-relay.example.com"
 schema = "my_relay"
-secret = "ce30b1831a4551f4cb7a984033c34ab96d8cf56ff50df9d0c27d9fa5422f2278"
+secret = "<hex private key>"
 
 [info]
 name = "My relay"
 icon = "https://example.com/icon.png"
-pubkey = "d9254d9898fd4728f7e2b32b87520221a50f6b8b97d935d7da2de8923988aa6d"
+pubkey = "<hex public key>"
 description = "A community relay for my friends"
 
 [policy]
