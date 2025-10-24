@@ -79,6 +79,10 @@ func LoadConfig(filename string) (*Config, error) {
 	return &config, nil
 }
 
+func (config *Config) Sign(event *nostr.Event) error {
+	return event.Sign(config.secret)
+}
+
 func (config *Config) GetSelf() nostr.PubKey {
 	return config.secret.Public()
 }
@@ -87,16 +91,12 @@ func (config *Config) IsSelf(pubkey nostr.PubKey) bool {
 	return pubkey == config.GetSelf()
 }
 
-func (config *Config) Sign(event *nostr.Event) error {
-	return event.Sign(config.secret)
+func (config *Config) GetOwner() nostr.PubKey {
+	return nostr.MustPubKeyFromHex(config.Info.Pubkey)
 }
 
 func (config *Config) IsOwner(pubkey nostr.PubKey) bool {
-	return pubkey.Hex() == config.Info.Pubkey
-}
-
-func (config *Config) IsAdmin(pubkey nostr.PubKey) bool {
-	return config.IsOwner(pubkey) || config.IsSelf(pubkey)
+	return pubkey == config.GetOwner()
 }
 
 func (config *Config) GetAssignedRoles(pubkey nostr.PubKey) []Role {
@@ -124,7 +124,7 @@ func (config *Config) GetAllRoles(pubkey nostr.PubKey) []Role {
 }
 
 func (config *Config) CanInvite(pubkey nostr.PubKey) bool {
-	if config.IsAdmin(pubkey) {
+	if config.IsOwner(pubkey) || config.IsSelf(pubkey) {
 		return true
 	}
 
@@ -138,7 +138,7 @@ func (config *Config) CanInvite(pubkey nostr.PubKey) bool {
 }
 
 func (config *Config) CanManage(pubkey nostr.PubKey) bool {
-	if config.IsAdmin(pubkey) {
+	if config.IsOwner(pubkey) || config.IsSelf(pubkey) {
 		return true
 	}
 

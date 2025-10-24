@@ -387,7 +387,7 @@ func (events *EventStore) GetOrCreateApplicationSpecificData(d string) nostr.Eve
 	}
 }
 
-func (events *EventStore) GetOrCreateMemberList() nostr.Event {
+func (events *EventStore) GetOrCreateRelayMembersList() nostr.Event {
 	filter := nostr.Filter{
 		Kinds: []nostr.Kind{RELAY_MEMBERS},
 	}

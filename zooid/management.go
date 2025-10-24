@@ -120,11 +120,35 @@ func (m *ManagementStore) PubkeyIsBanned(pubkey nostr.PubKey) bool {
 	return tag != nil
 }
 
+// Admins
+
+func (m *ManagementStore) IsAdmin(pubkey nostr.PubKey) bool {
+	return m.Config.IsOwner(pubkey) || m.Config.IsSelf(pubkey)
+}
+
+func (m *ManagementStore) GetAdmins() []nostr.PubKey {
+	members := make([]nostr.PubKey, 0)
+
+	members = append(members, m.Config.GetOwner())
+
+	members = append(members, m.Config.GetSelf())
+
+	for _, role := range m.Config.Roles {
+		if role.CanManage {
+			for _, pubkey := range role.Pubkeys {
+				members = append(members, nostr.MustPubKeyFromHex(pubkey))
+			}
+		}
+	}
+
+	return members
+}
+
 // Membership
 
 func (m *ManagementStore) GetMembers() []nostr.PubKey {
 	pubkeys := make([]nostr.PubKey, 0)
-	for tag := range m.Events.GetOrCreateMemberList().Tags.FindAll("member") {
+	for tag := range m.Events.GetOrCreateRelayMembersList().Tags.FindAll("member") {
 		pubkey, err := nostr.PubKeyFromHex(tag[1])
 
 		if err == nil {
@@ -136,11 +160,11 @@ func (m *ManagementStore) GetMembers() []nostr.PubKey {
 }
 
 func (m *ManagementStore) IsMember(pubkey nostr.PubKey) bool {
-	return m.Events.GetOrCreateMemberList().Tags.FindWithValue("member", pubkey.Hex()) != nil
+	return m.Events.GetOrCreateRelayMembersList().Tags.FindWithValue("member", pubkey.Hex()) != nil
 }
 
 func (m *ManagementStore) AddMember(pubkey nostr.PubKey) error {
-	membersEvent := m.Events.GetOrCreateMemberList()
+	membersEvent := m.Events.GetOrCreateRelayMembersList()
 
 	if membersEvent.Tags.FindWithValue("member", pubkey.Hex()) == nil {
 		addMemberEvent := nostr.Event{
@@ -167,7 +191,7 @@ func (m *ManagementStore) AddMember(pubkey nostr.PubKey) error {
 }
 
 func (m *ManagementStore) RemoveMember(pubkey nostr.PubKey) error {
-	membersEvent := m.Events.GetOrCreateMemberList()
+	membersEvent := m.Events.GetOrCreateRelayMembersList()
 
 	if membersEvent.Tags.FindWithValue("member", pubkey.Hex()) != nil {
 		removeMemberEvent := nostr.Event{
@@ -224,7 +248,7 @@ func (m *ManagementStore) GetAllowedPubkeyItems() []nip86.PubKeyReason {
 	reasons := make([]nip86.PubKeyReason, 0)
 
 	reasons = append(reasons, nip86.PubKeyReason{
-		PubKey: nostr.MustPubKeyFromHex(m.Config.Info.Pubkey),
+		PubKey: m.Config.GetOwner(),
 		Reason: "relay owner",
 	})
 
@@ -242,7 +266,7 @@ func (m *ManagementStore) GetAllowedPubkeyItems() []nip86.PubKeyReason {
 		}
 	}
 
-	for tag := range m.Events.GetOrCreateMemberList().Tags.FindAll("member") {
+	for tag := range m.Events.GetOrCreateRelayMembersList().Tags.FindAll("member") {
 		pubkey, err := nostr.PubKeyFromHex(tag[1])
 
 		if err != nil {
@@ -276,7 +300,7 @@ func (m *ManagementStore) AllowPubkey(pubkey nostr.PubKey) error {
 }
 
 func (m *ManagementStore) HasAccess(pubkey nostr.PubKey) bool {
-	if m.Config.IsAdmin(pubkey) {
+	if m.IsAdmin(pubkey) {
 		return true
 	}
 

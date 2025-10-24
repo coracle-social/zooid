@@ -50,8 +50,9 @@ func MakeInstance(filename string) (*Instance, error) {
 	}
 
 	groups := &GroupStore{
-		Config: config,
-		Events: events,
+		Config:     config,
+		Events:     events,
+		Management: management,
 	}
 
 	instance := &Instance{

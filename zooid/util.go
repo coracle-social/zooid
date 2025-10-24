@@ -48,6 +48,16 @@ func Filter[T any](ss []T, test func(T) bool) (ret []T) {
 	return
 }
 
+func Remove[T comparable](slice []T, element T) []T {
+	for i, v := range slice {
+		if v == element {
+			return append(slice[:i], slice[i+1:]...)
+		}
+	}
+
+	return slice
+}
+
 const letters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 func RandomString(n int) string {
