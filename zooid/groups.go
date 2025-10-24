@@ -97,6 +97,7 @@ func (g *GroupStore) GetAdmins(h string) []nostr.PubKey {
 func (g *GroupStore) GenerateAdminsEvent(h string) nostr.Event {
 	tags := nostr.Tags{
 		nostr.Tag{"-"},
+		nostr.Tag{"d", h},
 	}
 
 	for _, pubkey := range g.GetAdmins(h) {
@@ -192,6 +193,7 @@ func (g *GroupStore) GetMembers(h string) []nostr.PubKey {
 func (g *GroupStore) GenerateMembersEvent(h string) nostr.Event {
 	tags := nostr.Tags{
 		nostr.Tag{"-"},
+		nostr.Tag{"d", h},
 	}
 
 	for _, pubkey := range g.GetMembers(h) {

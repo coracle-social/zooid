@@ -275,9 +275,42 @@ func (instance *Instance) QueryStored(ctx context.Context, filter nostr.Filter) 
 			}
 		} else {
 			pubkey, _ := khatru.GetAuthed(ctx)
+			generated := make([]nostr.Event, 0)
 
 			if slices.Contains(filter.Kinds, RELAY_INVITE) && instance.Config.CanInvite(pubkey) {
-				if !yield(instance.StripSignature(ctx, instance.GenerateInviteEvent(pubkey))) {
+				generated = append(generated, instance.GenerateInviteEvent(pubkey))
+			}
+
+			if slices.Contains(filter.Kinds, nostr.KindSimpleGroupAdmins) {
+				filter = nostr.Filter{
+					Kinds: []nostr.Kind{nostr.KindSimpleGroupMetadata},
+				}
+
+				for event := range instance.Events.QueryEvents(filter, 0) {
+					if tag := event.Tags.Find("d"); tag != nil {
+						generated = append(generated, instance.Groups.GenerateAdminsEvent(tag[1]))
+					}
+				}
+			}
+
+			if slices.Contains(filter.Kinds, nostr.KindSimpleGroupMembers) {
+				filter = nostr.Filter{
+					Kinds: []nostr.Kind{nostr.KindSimpleGroupMetadata},
+				}
+
+				for event := range instance.Events.QueryEvents(filter, 0) {
+					if tag := event.Tags.Find("d"); tag != nil {
+						generated = append(generated, instance.Groups.GenerateMembersEvent(tag[1]))
+					}
+				}
+			}
+
+			for _, event := range generated {
+				if !filter.Matches(event) {
+					continue
+				}
+
+				if !yield(instance.StripSignature(ctx, event)) {
 					return
 				}
 			}
