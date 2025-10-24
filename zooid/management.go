@@ -284,10 +284,6 @@ func (m *ManagementStore) GetAllowedPubkeyItems() []nip86.PubKeyReason {
 }
 
 func (m *ManagementStore) AllowPubkey(pubkey nostr.PubKey) error {
-	if m.HasAccess(pubkey) {
-		return nil
-	}
-
 	if err := m.AddMember(pubkey); err != nil {
 		return err
 	}
@@ -297,18 +293,6 @@ func (m *ManagementStore) AllowPubkey(pubkey nostr.PubKey) error {
 	}
 
 	return nil
-}
-
-func (m *ManagementStore) HasAccess(pubkey nostr.PubKey) bool {
-	if m.IsAdmin(pubkey) {
-		return true
-	}
-
-	for range m.Config.GetAssignedRoles(pubkey) {
-		return true
-	}
-
-	return m.IsMember(pubkey)
 }
 
 // Joining
@@ -345,10 +329,6 @@ func (m *ManagementStore) Enable(instance *Instance) {
 
 		if !ok {
 			return true, "blocked: please authenticate in order to manage this relay"
-		}
-
-		if !m.HasAccess(pubkey) {
-			return true, "blocked: you are not a member of this relay"
 		}
 
 		if !m.Config.CanManage(pubkey) {

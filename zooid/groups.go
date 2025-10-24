@@ -228,3 +228,9 @@ func (g *GroupStore) HasAccess(h string, pubkey nostr.PubKey) bool {
 
 	return false
 }
+
+// Middleware
+
+func (g *GroupStore) Enable(instance *Instance) {
+	instance.Relay.Info.SupportedNIPs = append(instance.Relay.Info.SupportedNIPs, 29)
+}

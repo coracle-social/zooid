@@ -66,26 +66,16 @@ func MakeInstance(filename string) (*Instance, error) {
 
 	// NIP 11 info
 
+	owner := config.GetOwner()
+
 	instance.Relay.Negentropy = true
 	instance.Relay.Info.Name = config.Info.Name
 	instance.Relay.Info.Icon = config.Info.Icon
+	instance.Relay.Info.PubKey = &owner
 	instance.Relay.Info.Description = config.Info.Description
 	// instance.Relay.Info.Self = nostr.GetPublicKey(secret)
 	instance.Relay.Info.Software = "https://github.com/coracle-social/zooid"
 	instance.Relay.Info.Version = "v0.1.0"
-
-	if config.Info.Pubkey != "" {
-		pubkey, err := nostr.PubKeyFromHex(config.Info.Pubkey)
-		if err != nil {
-			return nil, err
-		}
-
-		instance.Relay.Info.PubKey = &pubkey
-	}
-
-	if instance.Config.Groups.Enabled {
-		instance.Relay.Info.SupportedNIPs = append(instance.Relay.Info.SupportedNIPs, 29)
-	}
 
 	// Handlers
 
@@ -113,11 +103,13 @@ func MakeInstance(filename string) (*Instance, error) {
 
 	router.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
-	// Initialize stuff
+	// Initialize the database
 
 	if err := instance.Events.Init(); err != nil {
 		log.Fatal("Failed to initialize event store: ", err)
 	}
+
+	// Enable extra functionality
 
 	if config.Blossom.Enabled {
 		instance.Blossom.Enable(instance)
@@ -125,6 +117,23 @@ func MakeInstance(filename string) (*Instance, error) {
 
 	if config.Management.Enabled {
 		instance.Management.Enable(instance)
+	}
+
+	if config.Groups.Enabled {
+		instance.Groups.Enable(instance)
+	}
+
+	// Update managed membership/admin lists
+
+	instance.Management.AllowPubkey(config.GetSelf())
+	instance.Management.AllowPubkey(config.GetOwner())
+
+	for _, role := range config.Roles {
+		for _, hex := range role.Pubkeys {
+			if pubkey, err := nostr.PubKeyFromHex(hex); err != nil {
+				instance.Management.AllowPubkey(pubkey)
+			}
+		}
 	}
 
 	return instance, nil
@@ -161,7 +170,7 @@ func (instance *Instance) AllowRecipientEvent(event nostr.Event) bool {
 		if recipientTag != nil {
 			pubkey, err := nostr.PubKeyFromHex(recipientTag[1])
 
-			if err == nil && instance.Management.HasAccess(pubkey) {
+			if err == nil && instance.Management.IsMember(pubkey) {
 				return true
 			}
 		}
@@ -258,7 +267,7 @@ func (instance *Instance) OnRequest(ctx context.Context, filter nostr.Filter) (r
 		return true, "auth-required: authentication is required for access"
 	}
 
-	if !instance.Management.HasAccess(pubkey) {
+	if !instance.Management.IsMember(pubkey) {
 		return true, "restricted: you are not a member of this relay"
 	}
 
@@ -335,7 +344,7 @@ func (instance *Instance) QueryStored(ctx context.Context, filter nostr.Filter) 
 						continue
 					}
 
-					if !instance.Groups.HasAccess(h, pubkey) {
+					if !instance.Groups.IsMember(h, pubkey) {
 						continue
 					}
 				}
@@ -371,7 +380,7 @@ func (instance *Instance) OnEvent(ctx context.Context, event nostr.Event) (rejec
 		return instance.Management.ValidateJoinRequest(event)
 	}
 
-	if !instance.Management.HasAccess(pubkey) {
+	if !instance.Management.IsMember(pubkey) {
 		return true, "restricted: you are not a member of this relay"
 	}
 

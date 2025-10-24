@@ -57,7 +57,7 @@ func (bl *BlossomStore) Enable(instance *Instance) {
 			return true, "file too large", 413
 		}
 
-		if auth == nil || !instance.Management.HasAccess(auth.PubKey) {
+		if auth == nil || !instance.Management.IsMember(auth.PubKey) {
 			return true, "unauthorized", 403
 		}
 
@@ -65,7 +65,7 @@ func (bl *BlossomStore) Enable(instance *Instance) {
 	}
 
 	backend.RejectGet = func(ctx context.Context, auth *nostr.Event, sha256 string, ext string) (bool, string, int) {
-		if auth == nil || !instance.Management.HasAccess(auth.PubKey) {
+		if auth == nil || !instance.Management.IsMember(auth.PubKey) {
 			return true, "unauthorized", 403
 		}
 
@@ -73,7 +73,7 @@ func (bl *BlossomStore) Enable(instance *Instance) {
 	}
 
 	backend.RejectList = func(ctx context.Context, auth *nostr.Event, pubkey nostr.PubKey) (bool, string, int) {
-		if auth == nil || !instance.Management.HasAccess(auth.PubKey) {
+		if auth == nil || !instance.Management.IsMember(auth.PubKey) {
 			return true, "unauthorized", 403
 		}
 
@@ -81,7 +81,7 @@ func (bl *BlossomStore) Enable(instance *Instance) {
 	}
 
 	backend.RejectDelete = func(ctx context.Context, auth *nostr.Event, sha256 string, ext string) (bool, string, int) {
-		if auth == nil || !instance.Management.HasAccess(auth.PubKey) {
+		if auth == nil || !instance.Management.IsMember(auth.PubKey) {
 			return true, "unauthorized", 403
 		}
 
