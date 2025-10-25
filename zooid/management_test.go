@@ -4,15 +4,18 @@ import (
 	"testing"
 
 	"fiatjaf.com/nostr"
+	"fiatjaf.com/nostr/khatru"
 )
 
 func createTestManagementStore() *ManagementStore {
 	config := &Config{
 		Host:   "test.com",
-		Secret: nostr.Generate(),
+		secret: nostr.Generate(),
 	}
 	schema := &Schema{Name: "test_" + RandomString(8)}
+	relay := &khatru.Relay{}
 	events := &EventStore{
+		Relay:  relay,
 		Config: config,
 		Schema: schema,
 	}
@@ -39,24 +42,11 @@ func TestManagementStore_BanPubkey(t *testing.T) {
 		t.Error("PubkeyIsBanned() should return true after banning")
 	}
 
-	// Test banned pubkey list
-	bannedPubkeys := mgmt.GetBannedPubkeys()
-	found := false
-	for _, banned := range bannedPubkeys {
-		if banned == pubkey {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("GetBannedPubkeys() should include banned pubkey")
-	}
-
 	// Test banned pubkey items
 	bannedItems := mgmt.GetBannedPubkeyItems()
 	itemFound := false
 	for _, item := range bannedItems {
-		if item.Pubkey == pubkey && item.Reason == reason {
+		if item.PubKey == pubkey && item.Reason == reason {
 			itemFound = true
 			break
 		}
@@ -78,7 +68,7 @@ func TestManagementStore_AllowPubkey(t *testing.T) {
 		t.Error("Setup: pubkey should be banned")
 	}
 
-	mgmt.AllowPubkey(pubkey, "unbanned")
+	mgmt.AllowPubkey(pubkey)
 
 	if mgmt.PubkeyIsBanned(pubkey) {
 		t.Error("PubkeyIsBanned() should return false after allowing")
@@ -98,24 +88,11 @@ func TestManagementStore_BanEvent(t *testing.T) {
 		t.Error("EventIsBanned() should return true after banning")
 	}
 
-	// Test banned event list
-	bannedEvents := mgmt.GetBannedEvents()
-	found := false
-	for _, banned := range bannedEvents {
-		if banned == eventID {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("GetBannedEvents() should include banned event")
-	}
-
 	// Test banned event items
 	bannedItems := mgmt.GetBannedEventItems()
 	itemFound := false
 	for _, item := range bannedItems {
-		if item.ID == eventID && item.Reason == reason {
+		if item.ID == eventID.Hex() && item.Reason == reason {
 			itemFound = true
 			break
 		}

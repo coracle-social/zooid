@@ -10,7 +10,7 @@ func createTestEventStore() *EventStore {
 	schema := &Schema{Name: "test_" + RandomString(8)}
 	config := &Config{
 		Host:   "test.com",
-		Secret: nostr.Generate(),
+		secret: nostr.Generate(),
 	}
 	return &EventStore{
 		Config: config,
@@ -534,7 +534,7 @@ func TestEventStore_GetOrCreateApplicationSpecificData(t *testing.T) {
 
 	dTag := "test/data"
 
-	// Test creating new data when none exists
+	// Test creating new data when none exists (unsigned)
 	event1 := store.GetOrCreateApplicationSpecificData(dTag)
 
 	if event1.Kind != nostr.KindApplicationSpecificData {
@@ -546,15 +546,18 @@ func TestEventStore_GetOrCreateApplicationSpecificData(t *testing.T) {
 		t.Errorf("GetOrCreateApplicationSpecificData() d tag = %v, want %v", dTagFound, dTag)
 	}
 
-	if event1.PubKey != store.Config.Secret.Public() {
-		t.Error("GetOrCreateApplicationSpecificData() should be signed by config secret")
-	}
+	// Sign and store the event
+	store.SignAndStoreEvent(&event1, false)
 
 	// Test retrieving existing data
 	event2 := store.GetOrCreateApplicationSpecificData(dTag)
 
 	if event1.ID != event2.ID {
 		t.Error("GetOrCreateApplicationSpecificData() should return same event when called again")
+	}
+
+	if event2.PubKey != store.Config.GetSelf() {
+		t.Error("Retrieved event should be signed by config secret")
 	}
 
 	// Test with different d tag creates new event

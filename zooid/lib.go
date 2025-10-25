@@ -28,17 +28,17 @@ func Dispatch(hostname string) (*Instance, bool) {
 func Start() {
 	dataDir := Env("DATA")
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		log.Fatal("Failed to create data directory: %v", err)
+		log.Fatalf("Failed to create data directory: %v", err)
 	}
 
 	mediaDir := Env("MEDIA")
 	if err := os.MkdirAll(mediaDir, 0755); err != nil {
-		log.Fatal("Failed to create media directory: %v", err)
+		log.Fatalf("Failed to create media directory: %v", err)
 	}
 
 	configDir := Env("CONFIG")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
-		log.Fatal("Failed to create config directory: %v", err)
+		log.Fatalf("Failed to create config directory: %v", err)
 	}
 
 	instancesOnce.Do(func() {
@@ -48,7 +48,7 @@ func Start() {
 
 	entries, err := os.ReadDir(configDir)
 	if err != nil {
-		log.Fatal("Failed to scan config directory: %v", err)
+		log.Fatalf("Failed to scan config directory: %v", err)
 	}
 
 	for _, entry := range entries {

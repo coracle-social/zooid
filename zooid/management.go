@@ -54,7 +54,7 @@ func (m *ManagementStore) BanEvent(id nostr.ID, reason string) error {
 func (m *ManagementStore) AllowEvent(id nostr.ID, reason string) error {
 	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_EVENTS)
 	event.Tags = Filter(event.Tags, func(t nostr.Tag) bool {
-		return t[1] == id.Hex()
+		return t[1] != id.Hex()
 	})
 
 	return m.Events.SignAndStoreEvent(&event, false)
