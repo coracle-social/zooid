@@ -66,14 +66,15 @@ func MakeInstance(filename string) (*Instance, error) {
 
 	// NIP 11 info
 
+	// self := config.GetSelf()
 	owner := config.GetOwner()
 
 	instance.Relay.Negentropy = true
 	instance.Relay.Info.Name = config.Info.Name
 	instance.Relay.Info.Icon = config.Info.Icon
+	// instance.Relay.Info.Self = &self
 	instance.Relay.Info.PubKey = &owner
 	instance.Relay.Info.Description = config.Info.Description
-	// instance.Relay.Info.Self = nostr.GetPublicKey(secret)
 	instance.Relay.Info.Software = "https://github.com/coracle-social/zooid"
 	instance.Relay.Info.Version = "v0.1.0"
 

@@ -2,6 +2,7 @@ package zooid
 
 import (
 	"fiatjaf.com/nostr"
+	"fiatjaf.com/nostr/nip29"
 )
 
 // Utils
@@ -66,6 +67,7 @@ func (g *GroupStore) SetMetadataFromEvent(event nostr.Event) error {
 func (g *GroupStore) DeleteGroup(h string) {
 	filters := []nostr.Filter{
 		{
+			Kinds: nip29.MetadataEventKinds,
 			Tags: nostr.TagMap{
 				"d": []string{h},
 			},
@@ -79,7 +81,9 @@ func (g *GroupStore) DeleteGroup(h string) {
 
 	for _, filter := range filters {
 		for event := range g.Events.QueryEvents(filter, 0) {
-			g.Events.DeleteEvent(event.ID)
+			if event.Kind != nostr.KindSimpleGroupDeleteEvent {
+				g.Events.DeleteEvent(event.ID)
+			}
 		}
 	}
 }
