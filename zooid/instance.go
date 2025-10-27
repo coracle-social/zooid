@@ -131,7 +131,7 @@ func MakeInstance(filename string) (*Instance, error) {
 
 	for _, role := range config.Roles {
 		for _, hex := range role.Pubkeys {
-			if pubkey, err := nostr.PubKeyFromHex(hex); err != nil {
+			if pubkey, err := nostr.PubKeyFromHex(hex); err == nil {
 				instance.Management.AllowPubkey(pubkey)
 			}
 		}
