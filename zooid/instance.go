@@ -479,10 +479,10 @@ func (instance *Instance) OnEventSaved(ctx context.Context, event nostr.Event) {
 
 func (instance *Instance) OnEphemeralEvent(ctx context.Context, event nostr.Event) {
 	if event.Kind == RELAY_JOIN {
-		instance.Management.AllowPubkey(event.PubKey)
+		instance.Management.AddMember(event.PubKey)
 	}
 
 	if event.Kind == RELAY_LEAVE {
-		instance.Management.BanPubkey(event.PubKey, "exited relay")
+		instance.Management.RemoveMember(event.PubKey)
 	}
 }
