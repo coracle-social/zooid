@@ -345,7 +345,7 @@ func (instance *Instance) QueryStored(ctx context.Context, filter nostr.Filter) 
 						continue
 					}
 
-					if !instance.Groups.IsMember(h, pubkey) {
+					if !instance.Groups.HasAccess(h, pubkey) {
 						continue
 					}
 				}
@@ -442,7 +442,7 @@ func (instance *Instance) OnEvent(ctx context.Context, event nostr.Event) (rejec
 			return true, "invalid: no such group exists"
 		}
 
-		if HasTag(meta.Tags, "closed") && !instance.Groups.IsMember(h, pubkey) {
+		if !instance.Groups.HasAccess(h, pubkey) {
 			return true, "restricted: you are not a member of that group"
 		}
 	}
