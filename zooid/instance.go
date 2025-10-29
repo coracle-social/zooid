@@ -77,6 +77,7 @@ func MakeInstance(filename string) (*Instance, error) {
 	instance.Relay.Info.Description = config.Info.Description
 	instance.Relay.Info.Software = "https://github.com/coracle-social/zooid"
 	instance.Relay.Info.Version = "v0.1.0"
+	instance.Relay.Info.SupportedNIPs = append(instance.Relay.Info.SupportedNIPs, 43)
 
 	// Handlers
 
