@@ -339,15 +339,15 @@ func (events *EventStore) CountEvents(filter nostr.Filter) (uint32, error) {
 // Non-eventstore methods
 
 func (events *EventStore) StoreEvent(event nostr.Event) error {
-	if event.Kind.IsRegular() {
-		if err := events.SaveEvent(event); err != nil && err != eventstore.ErrDupEvent {
-			return err
-		}
-
-		return nil
+	if event.Kind.IsReplaceable() || event.Kind.IsAddressable() {
+		return events.ReplaceEvent(event)
 	}
 
-	return events.ReplaceEvent(event)
+	if err := events.SaveEvent(event); err != nil && err != eventstore.ErrDupEvent {
+		return err
+	}
+
+	return nil
 }
 
 func (events *EventStore) SignAndStoreEvent(event *nostr.Event, broadcast bool) error {
