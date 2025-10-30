@@ -294,30 +294,6 @@ func (instance *Instance) QueryStored(ctx context.Context, filter nostr.Filter) 
 				generated = append(generated, instance.GenerateInviteEvent(pubkey))
 			}
 
-			if slices.Contains(filter.Kinds, nostr.KindSimpleGroupAdmins) {
-				groupsFilter := nostr.Filter{
-					Kinds: []nostr.Kind{nostr.KindSimpleGroupMetadata},
-				}
-
-				for event := range instance.Events.QueryEvents(groupsFilter, 0) {
-					if tag := event.Tags.Find("d"); tag != nil {
-						generated = append(generated, instance.Groups.GenerateAdminsEvent(tag[1]))
-					}
-				}
-			}
-
-			if slices.Contains(filter.Kinds, nostr.KindSimpleGroupMembers) {
-				groupsFilter := nostr.Filter{
-					Kinds: []nostr.Kind{nostr.KindSimpleGroupMetadata},
-				}
-
-				for event := range instance.Events.QueryEvents(groupsFilter, 0) {
-					if tag := event.Tags.Find("d"); tag != nil {
-						generated = append(generated, instance.Groups.GenerateMembersEvent(tag[1]))
-					}
-				}
-			}
-
 			for _, event := range generated {
 				if !filter.Matches(event) {
 					continue
@@ -458,25 +434,42 @@ func (instance *Instance) OnEvent(ctx context.Context, event nostr.Event) (rejec
 }
 
 func (instance *Instance) OnEventSaved(ctx context.Context, event nostr.Event) {
+	h := GetGroupIDFromEvent(event)
+
 	if event.Kind == nostr.KindSimpleGroupJoinRequest && instance.Config.Groups.AutoJoin {
-		h := GetGroupIDFromEvent(event)
 		meta := instance.Groups.GetMetadata(h)
 
 		if !HasTag(meta.Tags, "closed") {
 			instance.Groups.AddMember(h, event.PubKey)
+			instance.Groups.UpdateMembersList(h)
 		}
 	}
 
 	if event.Kind == nostr.KindSimpleGroupLeaveRequest && instance.Config.Groups.AutoLeave {
-		instance.Groups.RemoveMember(GetGroupIDFromEvent(event), event.PubKey)
+		instance.Groups.RemoveMember(h, event.PubKey)
+		instance.Groups.UpdateMembersList(h)
 	}
 
-	if event.Kind == nostr.KindSimpleGroupCreateGroup || event.Kind == nostr.KindSimpleGroupEditMetadata {
+	if event.Kind == nostr.KindSimpleGroupPutUser {
+		instance.Groups.UpdateMembersList(h)
+	}
+
+	if event.Kind == nostr.KindSimpleGroupRemoveUser {
+		instance.Groups.UpdateMembersList(h)
+	}
+
+	if event.Kind == nostr.KindSimpleGroupCreateGroup {
 		instance.Groups.SetMetadataFromEvent(event)
+		instance.Groups.UpdateAdminsList(h)
+	}
+
+	if event.Kind == nostr.KindSimpleGroupEditMetadata {
+		instance.Groups.SetMetadataFromEvent(event)
+		instance.Groups.UpdateAdminsList(h)
 	}
 
 	if event.Kind == nostr.KindSimpleGroupDeleteGroup {
-		instance.Groups.DeleteGroup(GetGroupIDFromEvent(event))
+		instance.Groups.DeleteGroup(h)
 	}
 }
 

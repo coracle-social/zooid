@@ -98,7 +98,7 @@ func (g *GroupStore) GetAdmins(h string) []nostr.PubKey {
 	return g.Management.GetAdmins()
 }
 
-func (g *GroupStore) GenerateAdminsEvent(h string) nostr.Event {
+func (g *GroupStore) UpdateAdminsList(h string) error {
 	tags := nostr.Tags{
 		nostr.Tag{"-"},
 		nostr.Tag{"d", h},
@@ -114,9 +114,7 @@ func (g *GroupStore) GenerateAdminsEvent(h string) nostr.Event {
 		Tags:      tags,
 	}
 
-	g.Config.Sign(&event)
-
-	return event
+	return g.Events.SignAndStoreEvent(&event, true)
 }
 
 // Membership
@@ -194,7 +192,7 @@ func (g *GroupStore) GetMembers(h string) []nostr.PubKey {
 	return members
 }
 
-func (g *GroupStore) GenerateMembersEvent(h string) nostr.Event {
+func (g *GroupStore) UpdateMembersList(h string) error {
 	tags := nostr.Tags{
 		nostr.Tag{"-"},
 		nostr.Tag{"d", h},
@@ -210,9 +208,7 @@ func (g *GroupStore) GenerateMembersEvent(h string) nostr.Event {
 		Tags:      tags,
 	}
 
-	g.Config.Sign(&event)
-
-	return event
+	return g.Events.SignAndStoreEvent(&event, true)
 }
 
 // Other stuff
