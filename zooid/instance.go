@@ -295,11 +295,11 @@ func (instance *Instance) QueryStored(ctx context.Context, filter nostr.Filter) 
 			}
 
 			if slices.Contains(filter.Kinds, nostr.KindSimpleGroupAdmins) {
-				filter = nostr.Filter{
+				groupsFilter := nostr.Filter{
 					Kinds: []nostr.Kind{nostr.KindSimpleGroupMetadata},
 				}
 
-				for event := range instance.Events.QueryEvents(filter, 0) {
+				for event := range instance.Events.QueryEvents(groupsFilter, 0) {
 					if tag := event.Tags.Find("d"); tag != nil {
 						generated = append(generated, instance.Groups.GenerateAdminsEvent(tag[1]))
 					}
@@ -307,11 +307,11 @@ func (instance *Instance) QueryStored(ctx context.Context, filter nostr.Filter) 
 			}
 
 			if slices.Contains(filter.Kinds, nostr.KindSimpleGroupMembers) {
-				filter = nostr.Filter{
+				groupsFilter := nostr.Filter{
 					Kinds: []nostr.Kind{nostr.KindSimpleGroupMetadata},
 				}
 
-				for event := range instance.Events.QueryEvents(filter, 0) {
+				for event := range instance.Events.QueryEvents(groupsFilter, 0) {
 					if tag := event.Tags.Find("d"); tag != nil {
 						generated = append(generated, instance.Groups.GenerateMembersEvent(tag[1]))
 					}
