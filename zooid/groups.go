@@ -90,7 +90,7 @@ func (g *GroupStore) DeleteGroup(h string) {
 
 	for _, filter := range filters {
 		for event := range g.Events.QueryEvents(filter, 0) {
-			if event.Kind != nostr.KindSimpleGroupDeleteEvent {
+			if event.Kind != nostr.KindSimpleGroupDeleteGroup {
 				g.Events.DeleteEvent(event.ID)
 			}
 		}
