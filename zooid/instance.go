@@ -397,13 +397,13 @@ func (instance *Instance) OnEvent(ctx context.Context, event nostr.Event) (rejec
 			return true, "invalid: h tag is required"
 		}
 
-		meta := instance.Groups.GetMetadata(h)
+		_, found := instance.Groups.GetMetadata(h)
 
 		if event.Kind == nostr.KindSimpleGroupCreateGroup {
-			if !IsEmptyEvent(meta) {
+			if found {
 				return true, "invalid: that group already exists"
 			}
-		} else if IsEmptyEvent(meta) {
+		} else if !found {
 			return true, "invalid: no such group exists"
 		}
 
@@ -415,9 +415,9 @@ func (instance *Instance) OnEvent(ctx context.Context, event nostr.Event) (rejec
 			return true, "duplicate: not currently a member"
 		}
 	} else if h != "" {
-		meta := instance.Groups.GetMetadata(h)
+		_, found := instance.Groups.GetMetadata(h)
 
-		if IsEmptyEvent(meta) {
+		if !found {
 			return true, "invalid: no such group exists"
 		}
 
@@ -434,12 +434,22 @@ func (instance *Instance) OnEvent(ctx context.Context, event nostr.Event) (rejec
 }
 
 func (instance *Instance) OnEventSaved(ctx context.Context, event nostr.Event) {
+	var groupMeta nostr.Event
+	var groupFound bool
+
 	h := GetGroupIDFromEvent(event)
 
-	if event.Kind == nostr.KindSimpleGroupJoinRequest && instance.Config.Groups.AutoJoin {
-		meta := instance.Groups.GetMetadata(h)
+	if h != "" {
+		groupMeta, groupFound = instance.Groups.GetMetadata(h)
 
-		if !HasTag(meta.Tags, "closed") {
+		if !groupFound && event.Kind != nostr.KindSimpleGroupCreateGroup {
+			log.Printf("Attempted to process event for nonexistent group %s", h)
+			return
+		}
+	}
+
+	if event.Kind == nostr.KindSimpleGroupJoinRequest && instance.Config.Groups.AutoJoin {
+		if !HasTag(groupMeta.Tags, "closed") {
 			instance.Groups.AddMember(h, event.PubKey)
 			instance.Groups.UpdateMembersList(h)
 		}
@@ -459,12 +469,12 @@ func (instance *Instance) OnEventSaved(ctx context.Context, event nostr.Event) {
 	}
 
 	if event.Kind == nostr.KindSimpleGroupCreateGroup {
-		instance.Groups.SetMetadataFromEvent(event)
+		instance.Groups.UpdateMetadata(event)
 		instance.Groups.UpdateAdminsList(h)
 	}
 
 	if event.Kind == nostr.KindSimpleGroupEditMetadata {
-		instance.Groups.SetMetadataFromEvent(event)
+		instance.Groups.UpdateMetadata(event)
 		instance.Groups.UpdateAdminsList(h)
 	}
 

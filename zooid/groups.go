@@ -3,12 +3,21 @@ package zooid
 import (
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/nip29"
+	"slices"
 )
 
 // Utils
 
 func GetGroupIDFromEvent(event nostr.Event) string {
-	tag := event.Tags.Find("h")
+	var tagName string
+
+	if slices.Contains(nip29.MetadataEventKinds, event.Kind) {
+		tagName = "d"
+	} else {
+		tagName = "h"
+	}
+
+	tag := event.Tags.Find(tagName)
 
 	if tag != nil {
 		return tag[1]
@@ -27,7 +36,7 @@ type GroupStore struct {
 
 // Metadata
 
-func (g *GroupStore) GetMetadata(h string) nostr.Event {
+func (g *GroupStore) GetMetadata(h string) (nostr.Event, bool) {
 	filter := nostr.Filter{
 		Kinds: []nostr.Kind{nostr.KindSimpleGroupMetadata},
 		Tags: nostr.TagMap{
@@ -36,13 +45,13 @@ func (g *GroupStore) GetMetadata(h string) nostr.Event {
 	}
 
 	for event := range g.Events.QueryEvents(filter, 1) {
-		return event
+		return event, true
 	}
 
-	return nostr.Event{}
+	return nostr.Event{}, false
 }
 
-func (g *GroupStore) SetMetadataFromEvent(event nostr.Event) error {
+func (g *GroupStore) UpdateMetadata(event nostr.Event) error {
 	tags := nostr.Tags{}
 
 	for _, tag := range event.Tags {
@@ -214,7 +223,13 @@ func (g *GroupStore) UpdateMembersList(h string) error {
 // Other stuff
 
 func (g *GroupStore) HasAccess(h string, pubkey nostr.PubKey) bool {
-	if !HasTag(g.GetMetadata(h).Tags, "closed") {
+	meta, found := g.GetMetadata(h)
+
+	if !found {
+		return false
+	}
+
+	if !HasTag(meta.Tags, "closed") {
 		return true
 	}
 
