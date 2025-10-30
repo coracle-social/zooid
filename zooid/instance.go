@@ -214,8 +214,10 @@ func (instance *Instance) IsWriteOnlyEvent(event nostr.Event) bool {
 
 func (instance *Instance) GenerateInviteEvent(pubkey nostr.PubKey) nostr.Event {
 	filter := nostr.Filter{
-		Kinds:   []nostr.Kind{RELAY_INVITE},
-		Authors: []nostr.PubKey{pubkey},
+		Kinds: []nostr.Kind{RELAY_INVITE},
+		Tags: nostr.TagMap{
+			"#p": []string{pubkey.Hex()},
+		},
 	}
 
 	for event := range instance.Events.QueryEvents(filter, 1) {
