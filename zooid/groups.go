@@ -290,20 +290,28 @@ func (g *GroupStore) CheckWrite(event nostr.Event) string {
 		return "invalid: group not found"
 	}
 
-	if event.Kind == nostr.KindSimpleGroupJoinRequest && g.IsMember(h, event.PubKey) {
-		return "duplicate: already a member"
-	}
-
-	if event.Kind == nostr.KindSimpleGroupLeaveRequest && !g.IsMember(h, event.PubKey) {
-		return "duplicate: not currently a member"
-	}
-
 	if slices.Contains(nip29.ModerationEventKinds, event.Kind) && !g.Config.CanManage(event.PubKey) {
 		return "restricted: you are not authorized to manage groups"
 	}
 
 	if HasTag(meta.Tags, "hidden") && !g.HasAccess(h, event.PubKey) {
 		return "invalid: group not found"
+	}
+
+	if event.Kind == nostr.KindSimpleGroupJoinRequest {
+  	if g.IsMember(h, event.PubKey) {
+  		return "duplicate: already a member"
+  	} else {
+      return ""
+  	}
+	}
+
+	if event.Kind == nostr.KindSimpleGroupLeaveRequest {
+  	if !g.IsMember(h, event.PubKey) {
+  		return "duplicate: not currently a member"
+  	} else {
+      return ""
+  	}
 	}
 
 	if HasTag(meta.Tags, "closed") && !g.HasAccess(h, event.PubKey) {
