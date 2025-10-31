@@ -298,6 +298,10 @@ func (m *ManagementStore) AllowPubkey(pubkey nostr.PubKey) error {
 // Joining
 
 func (m *ManagementStore) ValidateJoinRequest(event nostr.Event) (reject bool, err string) {
+	if m.IsMember(event.PubKey) {
+		return false, ""
+	}
+
 	if m.PubkeyIsBanned(event.PubKey) {
 		return true, "invalid: you have been banned from this relay"
 	}

@@ -31,8 +31,8 @@ type Config struct {
 	} `toml:"policy"`
 
 	Groups struct {
-		Enabled   bool `toml:"enabled"`
-		AutoJoin  bool `toml:"auto_join"`
+		Enabled  bool `toml:"enabled"`
+		AutoJoin bool `toml:"auto_join"`
 	} `toml:"groups"`
 
 	Management struct {

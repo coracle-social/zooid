@@ -283,9 +283,9 @@ func (g *GroupStore) CheckWrite(event nostr.Event) string {
 	meta, found := g.GetMetadata(h)
 
 	if event.Kind == nostr.KindSimpleGroupCreateGroup {
-  	if found {
-  		return "invalid: that group already exists"
-  	}
+		if found {
+			return "invalid: that group already exists"
+		}
 	} else if !found {
 		return "invalid: group not found"
 	}
@@ -299,19 +299,19 @@ func (g *GroupStore) CheckWrite(event nostr.Event) string {
 	}
 
 	if event.Kind == nostr.KindSimpleGroupJoinRequest {
-  	if g.IsMember(h, event.PubKey) {
-  		return "duplicate: already a member"
-  	} else {
-      return ""
-  	}
+		if g.IsMember(h, event.PubKey) {
+			return "duplicate: already a member"
+		} else {
+			return ""
+		}
 	}
 
 	if event.Kind == nostr.KindSimpleGroupLeaveRequest {
-  	if !g.IsMember(h, event.PubKey) {
-  		return "duplicate: not currently a member"
-  	} else {
-      return ""
-  	}
+		if !g.IsMember(h, event.PubKey) {
+			return "duplicate: not currently a member"
+		} else {
+			return ""
+		}
 	}
 
 	if HasTag(meta.Tags, "closed") && !g.HasAccess(h, event.PubKey) {
