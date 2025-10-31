@@ -33,7 +33,6 @@ type Config struct {
 	Groups struct {
 		Enabled   bool `toml:"enabled"`
 		AutoJoin  bool `toml:"auto_join"`
-		AutoLeave bool `toml:"auto_leave"`
 	} `toml:"groups"`
 
 	Management struct {

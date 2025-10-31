@@ -10,7 +10,6 @@ import (
 
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/khatru"
-	"fiatjaf.com/nostr/nip29"
 	"github.com/gosimple/slug"
 )
 
@@ -317,19 +316,7 @@ func (instance *Instance) QueryStored(ctx context.Context, filter nostr.Filter) 
 					continue
 				}
 
-				h := GetGroupIDFromEvent(event)
-
-				if h != "" {
-					if !instance.Config.Groups.Enabled {
-						continue
-					}
-
-					if !instance.Groups.HasAccess(h, pubkey) {
-						continue
-					}
-				}
-
-				if !instance.Config.Groups.Enabled && slices.Contains(nip29.MetadataEventKinds, event.Kind) {
+				if instance.Groups.IsGroupEvent(event) && !instance.Groups.CanRead(pubkey, event) {
 					continue
 				}
 
@@ -372,57 +359,9 @@ func (instance *Instance) OnEvent(ctx context.Context, event nostr.Event) (rejec
 		return true, "invalid: this event's kind is not accepted"
 	}
 
-	if slices.Contains(nip29.MetadataEventKinds, event.Kind) {
-		return true, "invalid: group metadata cannot be set directly"
-	}
-
-	if slices.Contains(nip29.ModerationEventKinds, event.Kind) && !instance.Config.CanManage(event.PubKey) {
-		return true, "restricted: you are not authorized to manage groups"
-	}
-
-	allGroupKinds := append(
-		nip29.ModerationEventKinds,
-		nostr.KindSimpleGroupJoinRequest,
-		nostr.KindSimpleGroupLeaveRequest,
-	)
-
-	h := GetGroupIDFromEvent(event)
-
-	if slices.Contains(allGroupKinds, event.Kind) {
-		if !instance.Config.Groups.Enabled {
-			return true, "invalid: group events not accepted on this relay"
-		}
-
-		if h == "" {
-			return true, "invalid: h tag is required"
-		}
-
-		_, found := instance.Groups.GetMetadata(h)
-
-		if event.Kind == nostr.KindSimpleGroupCreateGroup {
-			if found {
-				return true, "invalid: that group already exists"
-			}
-		} else if !found {
-			return true, "invalid: no such group exists"
-		}
-
-		if event.Kind == nostr.KindSimpleGroupJoinRequest && instance.Groups.IsMember(h, event.PubKey) {
-			return true, "duplicate: already a member"
-		}
-
-		if event.Kind == nostr.KindSimpleGroupLeaveRequest && !instance.Groups.IsMember(h, event.PubKey) {
-			return true, "duplicate: not currently a member"
-		}
-	} else if h != "" {
-		_, found := instance.Groups.GetMetadata(h)
-
-		if !found {
-			return true, "invalid: no such group exists"
-		}
-
-		if !instance.Groups.HasAccess(h, pubkey) {
-			return true, "restricted: you are not a member of that group"
+	if instance.Groups.IsGroupEvent(event) {
+		if err := instance.Groups.CheckWrite(event); err != "" {
+			return true, err
 		}
 	}
 
@@ -455,7 +394,7 @@ func (instance *Instance) OnEventSaved(ctx context.Context, event nostr.Event) {
 		}
 	}
 
-	if event.Kind == nostr.KindSimpleGroupLeaveRequest && instance.Config.Groups.AutoLeave {
+	if event.Kind == nostr.KindSimpleGroupLeaveRequest {
 		instance.Groups.RemoveMember(h, event.PubKey)
 		instance.Groups.UpdateMembersList(h)
 	}

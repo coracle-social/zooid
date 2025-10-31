@@ -223,25 +223,94 @@ func (g *GroupStore) UpdateMembersList(h string) error {
 // Other stuff
 
 func (g *GroupStore) HasAccess(h string, pubkey nostr.PubKey) bool {
+	return g.IsAdmin(h, pubkey) || g.IsMember(h, pubkey)
+}
+
+func (g *GroupStore) IsGroupEvent(event nostr.Event) bool {
+	if slices.Contains(nip29.MetadataEventKinds, event.Kind) {
+		return true
+	}
+
+	if slices.Contains(nip29.ModerationEventKinds, event.Kind) {
+		return true
+	}
+
+	joinKinds := []nostr.Kind{
+		nostr.KindSimpleGroupJoinRequest,
+		nostr.KindSimpleGroupLeaveRequest,
+	}
+
+	if slices.Contains(joinKinds, event.Kind) {
+		return true
+	}
+
+	return GetGroupIDFromEvent(event) != ""
+}
+
+func (g *GroupStore) CanRead(pubkey nostr.PubKey, event nostr.Event) bool {
+	if !g.Config.Groups.Enabled {
+		return false
+	}
+
+	h := GetGroupIDFromEvent(event)
 	meta, found := g.GetMetadata(h)
 
 	if !found {
 		return false
 	}
 
-	if !HasTag(meta.Tags, "closed") {
-		return true
+	if HasTag(meta.Tags, "hidden") && !g.HasAccess(h, pubkey) {
+		return false
 	}
 
-	if g.IsAdmin(h, pubkey) {
-		return true
+	if HasTag(meta.Tags, "private") && !g.HasAccess(h, pubkey) {
+		return false
 	}
 
-	if g.IsMember(h, pubkey) {
-		return true
+	return true
+}
+
+func (g *GroupStore) CheckWrite(event nostr.Event) string {
+	if !g.Config.Groups.Enabled {
+		return "invalid: groups are not enabled"
 	}
 
-	return false
+	if slices.Contains(nip29.MetadataEventKinds, event.Kind) {
+		return "invalid: group metadata cannot be set directly"
+	}
+
+	h := GetGroupIDFromEvent(event)
+	meta, found := g.GetMetadata(h)
+
+	if event.Kind == nostr.KindSimpleGroupCreateGroup {
+  	if found {
+  		return "invalid: that group already exists"
+  	}
+	} else if !found {
+		return "invalid: group not found"
+	}
+
+	if event.Kind == nostr.KindSimpleGroupJoinRequest && g.IsMember(h, event.PubKey) {
+		return "duplicate: already a member"
+	}
+
+	if event.Kind == nostr.KindSimpleGroupLeaveRequest && !g.IsMember(h, event.PubKey) {
+		return "duplicate: not currently a member"
+	}
+
+	if slices.Contains(nip29.ModerationEventKinds, event.Kind) && !g.Config.CanManage(event.PubKey) {
+		return "restricted: you are not authorized to manage groups"
+	}
+
+	if HasTag(meta.Tags, "hidden") && !g.HasAccess(h, event.PubKey) {
+		return "invalid: group not found"
+	}
+
+	if HasTag(meta.Tags, "closed") && !g.HasAccess(h, event.PubKey) {
+		return "restricted: you are not a member of that group"
+	}
+
+	return ""
 }
 
 // Middleware

@@ -44,7 +44,6 @@ Configures NIP 29 support.
 
 - `enabled` - whether NIP 29 is enabled.
 - `auto_join` - whether relay members can join `open` groups without approval. Defaults to `true`.
-- `auto_leave` - whether relay members can leave groups without approval. Defaults to `true`.
 
 ### `[management]`
 
@@ -90,7 +89,6 @@ strip_signatures = false
 [groups]
 enabled = true
 auto_join = false
-auto_leave = true
 
 [management]
 enabled = true
