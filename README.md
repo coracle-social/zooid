@@ -43,7 +43,7 @@ Contains policy and access related configuration.
 Configures NIP 29 support.
 
 - `enabled` - whether NIP 29 is enabled.
-- `auto_join` - whether relay members can join `open` groups without approval. Defaults to `true`.
+- `auto_join` - whether relay members can join groups without approval. Defaults to `false`.
 
 ### `[management]`
 

@@ -373,25 +373,11 @@ func (instance *Instance) OnEvent(ctx context.Context, event nostr.Event) (rejec
 }
 
 func (instance *Instance) OnEventSaved(ctx context.Context, event nostr.Event) {
-	var groupMeta nostr.Event
-	var groupFound bool
-
 	h := GetGroupIDFromEvent(event)
 
-	if h != "" {
-		groupMeta, groupFound = instance.Groups.GetMetadata(h)
-
-		if !groupFound && event.Kind != nostr.KindSimpleGroupCreateGroup {
-			log.Printf("Attempted to process event for nonexistent group %s", h)
-			return
-		}
-	}
-
 	if event.Kind == nostr.KindSimpleGroupJoinRequest && instance.Config.Groups.AutoJoin {
-		if !HasTag(groupMeta.Tags, "closed") {
-			instance.Groups.AddMember(h, event.PubKey)
-			instance.Groups.UpdateMembersList(h)
-		}
+		instance.Groups.AddMember(h, event.PubKey)
+		instance.Groups.UpdateMembersList(h)
 	}
 
 	if event.Kind == nostr.KindSimpleGroupLeaveRequest {
