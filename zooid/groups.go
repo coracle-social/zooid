@@ -188,7 +188,7 @@ func (g *GroupStore) GetMembers(h string) []nostr.PubKey {
 
 	for event := range g.Events.QueryEvents(filter, 0) {
 		for hex := range event.Tags.FindAll("p") {
-			if pubkey, err := nostr.PubKeyFromHex(hex[1]); err != nil {
+			if pubkey, err := nostr.PubKeyFromHex(hex[1]); err == nil {
 				if event.Kind == nostr.KindSimpleGroupPutUser {
 					members = append(members, pubkey)
 				} else {
@@ -261,6 +261,14 @@ func (g *GroupStore) CanRead(pubkey nostr.PubKey, event nostr.Event) bool {
 
 	if HasTag(meta.Tags, "hidden") && !g.HasAccess(h, pubkey) {
 		return false
+	}
+
+	if event.Kind == nostr.KindSimpleGroupMetadata {
+		return true
+	}
+
+	if event.Kind == nostr.KindSimpleGroupDeleteGroup {
+		return true
 	}
 
 	if HasTag(meta.Tags, "private") && !g.HasAccess(h, pubkey) {
