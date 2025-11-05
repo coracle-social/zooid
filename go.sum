@@ -1,5 +1,7 @@
 fiatjaf.com/nostr v0.0.0-20250924142401-59bd3c29fffd h1:LnbRz+TxZAROXglKFT+Lqsdqe5Pu8PG0rSpmXGnES90=
 fiatjaf.com/nostr v0.0.0-20250924142401-59bd3c29fffd/go.mod h1:Nq86Jjsd0OmsOEImUg0iCcLuqM5B67Nj2eu/2dP74Ss=
+fiatjaf.com/nostr v0.0.0-20251104112613-38a6ca92b954 h1:CMD8D3TgEjGhuIBNMnvZ0EXOW0JR9O3w8AI6Yuzt8Ec=
+fiatjaf.com/nostr v0.0.0-20251104112613-38a6ca92b954/go.mod h1:Nq86Jjsd0OmsOEImUg0iCcLuqM5B67Nj2eu/2dP74Ss=
 github.com/BurntSushi/toml v1.5.0 h1:W5quZX/G/csjUnuI8SUYlsHs9M38FC7znL0lIO+DvMg=
 github.com/BurntSushi/toml v1.5.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
 github.com/ImVexed/fasturl v0.0.0-20230304231329-4e41488060f3 h1:ClzzXMDDuUbWfNNZqGeYq4PnYOlwlOVIvSyNaIy0ykg=

@@ -31,10 +31,12 @@ type ManagementStore struct {
 func (m *ManagementStore) GetBannedEventItems() []nip86.IDReason {
 	items := make([]nip86.IDReason, 0)
 	for tag := range m.Events.GetOrCreateApplicationSpecificData(BANNED_EVENTS).Tags.FindAll("event") {
-		items = append(items, nip86.IDReason{
-			ID:     tag[1],
-			Reason: tag[2],
-		})
+		if id, err := nostr.IDFromHex(tag[1]); err == nil {
+			items = append(items, nip86.IDReason{
+				ID:     id,
+				Reason: tag[2],
+			})
+		}
 	}
 
 	return items

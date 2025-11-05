@@ -245,7 +245,7 @@ func (instance *Instance) OnConnect(ctx context.Context) {
 	khatru.RequestAuth(ctx)
 }
 
-func (instance *Instance) PreventBroadcast(ws *khatru.WebSocket, event nostr.Event) bool {
+func (instance *Instance) PreventBroadcast(ws *khatru.WebSocket, filter nostr.Filter, event nostr.Event) bool {
 	return instance.IsWriteOnlyEvent(event)
 }
 

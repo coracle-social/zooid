@@ -3,7 +3,7 @@ module zooid
 go 1.24.1
 
 require (
-	fiatjaf.com/nostr v0.0.0-20250924142401-59bd3c29fffd
+	fiatjaf.com/nostr v0.0.0-20251104112613-38a6ca92b954
 	github.com/BurntSushi/toml v1.5.0
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/fsnotify/fsnotify v1.9.0
