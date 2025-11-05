@@ -186,9 +186,9 @@ func (g *GroupStore) GetMembers(h string) []nostr.PubKey {
 
 	members := make([]nostr.PubKey, 0)
 
-	for event := range g.Events.QueryEvents(filter, 0) {
-		for hex := range event.Tags.FindAll("p") {
-			if pubkey, err := nostr.PubKeyFromHex(hex[1]); err == nil {
+	for _, event := range Reversed(slices.Collect(g.Events.QueryEvents(filter, 0))) {
+		for tag := range event.Tags.FindAll("p") {
+			if pubkey, err := nostr.PubKeyFromHex(tag[1]); err == nil {
 				if event.Kind == nostr.KindSimpleGroupPutUser {
 					members = append(members, pubkey)
 				} else {

@@ -3,6 +3,7 @@ package zooid
 import (
 	"fiatjaf.com/nostr"
 	"math/rand"
+	"slices"
 	"strings"
 )
 
@@ -54,6 +55,12 @@ func Remove[T comparable](slice []T, element T) []T {
 			return append(slice[:i], slice[i+1:]...)
 		}
 	}
+
+	return slice
+}
+
+func Reversed[T any](slice []T) []T {
+	slices.Reverse(slice)
 
 	return slice
 }
