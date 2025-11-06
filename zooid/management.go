@@ -5,7 +5,6 @@ import (
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/khatru"
 	"fiatjaf.com/nostr/nip86"
-	"fmt"
 )
 
 // Management store takes care of all nip 86 methods, as well as defining actions for internal use.
@@ -248,38 +247,14 @@ func (m *ManagementStore) BanPubkey(pubkey nostr.PubKey, reason string) error {
 
 func (m *ManagementStore) GetAllowedPubkeyItems() []nip86.PubKeyReason {
 	reasons := make([]nip86.PubKeyReason, 0)
-
-	reasons = append(reasons, nip86.PubKeyReason{
-		PubKey: m.Config.GetOwner(),
-		Reason: "relay owner",
-	})
-
-	reasons = append(reasons, nip86.PubKeyReason{
-		PubKey: m.Config.GetSelf(),
-		Reason: "relay self",
-	})
-
-	for name, role := range m.Config.Roles {
-		for _, pubkey := range role.Pubkeys {
-			reasons = append(reasons, nip86.PubKeyReason{
-				PubKey: nostr.MustPubKeyFromHex(pubkey),
-				Reason: fmt.Sprintf("assigned to %s role", name),
-			})
-		}
-	}
-
-	for tag := range m.Events.GetOrCreateRelayMembersList().Tags.FindAll("member") {
-		pubkey, err := nostr.PubKeyFromHex(tag[1])
-
-		if err != nil {
-			reasons = append(
-				reasons,
-				nip86.PubKeyReason{
-					PubKey: pubkey,
-					Reason: "relay member",
-				},
-			)
-		}
+	for _, pubkey := range m.GetMembers() {
+		reasons = append(
+			reasons,
+			nip86.PubKeyReason{
+				PubKey: pubkey,
+				Reason: "relay member",
+			},
+		)
 	}
 
 	return reasons
