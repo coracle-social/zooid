@@ -348,9 +348,17 @@ func (m *ManagementStore) Enable(instance *Instance) {
 		return m.BanPubkey(pubkey, reason)
 	}
 
+	// instance.Relay.ManagementAPI.UnbanPubKey = func(ctx context.Context, pubkey nostr.PubKey, reason string) error {
+	// 	return m.RemoveBannedPubkey(pubkey)
+	// }
+
 	instance.Relay.ManagementAPI.AllowPubKey = func(ctx context.Context, pubkey nostr.PubKey, reason string) error {
 		return m.AllowPubkey(pubkey)
 	}
+
+	// instance.Relay.ManagementAPI.UnallowPubKey = func(ctx context.Context, pubkey nostr.PubKey, reason string) error {
+	// 	return m.RemoveMember(pubkey)
+	// }
 
 	instance.Relay.ManagementAPI.ListBannedPubKeys = func(ctx context.Context) ([]nip86.PubKeyReason, error) {
 		return m.GetBannedPubkeyItems(), nil
