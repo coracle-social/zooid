@@ -223,7 +223,7 @@ func (g *GroupStore) UpdateMembersList(h string) error {
 // Other stuff
 
 func (g *GroupStore) HasAccess(h string, pubkey nostr.PubKey) bool {
-	return g.IsAdmin(h, pubkey) || g.IsMember(h, pubkey)
+	return g.Config.CanManage(pubkey) || g.IsAdmin(h, pubkey) || g.IsMember(h, pubkey)
 }
 
 func (g *GroupStore) IsGroupEvent(event nostr.Event) bool {
