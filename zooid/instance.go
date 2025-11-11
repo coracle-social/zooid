@@ -98,7 +98,7 @@ func MakeInstance(filename string) (*Instance, error) {
 
 	router := instance.Relay.Router()
 
-	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/{$}", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "templates/index.html")
 	})
 
