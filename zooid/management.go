@@ -319,6 +319,20 @@ func (m *ManagementStore) Enable(instance *Instance) {
 		return false, ""
 	}
 
+	instance.Relay.ManagementAPI.ChangeRelayName = func(ctx context.Context, name string) error {
+		return m.Config.SetName(name)
+	}
+	instance.Relay.ManagementAPI.ChangeRelayDescription = func(ctx context.Context, desc string) error {
+		return m.Config.SetDescription(desc)
+	}
+	instance.Relay.ManagementAPI.ChangeRelayIcon = func(ctx context.Context, icon string) error {
+		return m.Config.SetIcon(icon)
+	}
+
+	instance.Relay.ManagementAPI.BanPubKey = func(ctx context.Context, pubkey nostr.PubKey, reason string) error {
+		return m.BanPubkey(pubkey, reason)
+	}
+
 	instance.Relay.ManagementAPI.BanPubKey = func(ctx context.Context, pubkey nostr.PubKey, reason string) error {
 		return m.BanPubkey(pubkey, reason)
 	}

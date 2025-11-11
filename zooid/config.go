@@ -4,6 +4,7 @@ import (
 	"fiatjaf.com/nostr"
 	"fmt"
 	"github.com/BurntSushi/toml"
+	"os"
 	"path/filepath"
 	"slices"
 )
@@ -21,7 +22,6 @@ type Config struct {
 	Info   struct {
 		Name        string `toml:"name"`
 		Icon        string `toml:"icon"`
-		Secret      string `toml:"secret"`
 		Pubkey      string `toml:"pubkey"`
 		Description string `toml:"description"`
 	} `toml:"info"`
@@ -47,6 +47,7 @@ type Config struct {
 	Roles map[string]Role `toml:"roles"`
 
 	// Private/parsed values
+	path   string
 	secret nostr.SecretKey
 }
 
@@ -71,11 +72,53 @@ func LoadConfig(filename string) (*Config, error) {
 		return nil, err
 	}
 
+	// Save the path for later
+	config.path = path
+
 	// Make the secret... secret
 	config.Secret = ""
 	config.secret = secret
 
 	return &config, nil
+}
+
+func (config *Config) Save() error {
+	// Restore the secret key to the public field for saving
+	config.Secret = config.secret.Hex()
+
+	file, err := os.Create(config.path)
+	if err != nil {
+		return fmt.Errorf("Failed to open config file %s: %w", config.path, err)
+	}
+	defer file.Close()
+
+	encoder := toml.NewEncoder(file)
+	if err := encoder.Encode(config); err != nil {
+		return fmt.Errorf("Failed to encode config file %s: %w", config.path, err)
+	}
+
+	// Clear the secret again
+	config.Secret = ""
+
+	return nil
+}
+
+func (config *Config) SetName(name string) error {
+	config.Info.Name = name
+
+	return config.Save()
+}
+
+func (config *Config) SetDescription(description string) error {
+	config.Info.Description = description
+
+	return config.Save()
+}
+
+func (config *Config) SetIcon(icon string) error {
+	config.Info.Icon = icon
+
+	return config.Save()
 }
 
 func (config *Config) Sign(event *nostr.Event) error {
