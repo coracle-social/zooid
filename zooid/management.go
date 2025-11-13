@@ -47,6 +47,7 @@ func (m *ManagementStore) BanEvent(id nostr.ID, reason string) error {
 	}
 
 	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_EVENTS)
+	event.CreatedAt = nostr.Now()
 	event.Tags = append(event.Tags, nostr.Tag{"event", id.Hex(), reason})
 
 	return m.Events.SignAndStoreEvent(&event, false)
@@ -54,6 +55,7 @@ func (m *ManagementStore) BanEvent(id nostr.ID, reason string) error {
 
 func (m *ManagementStore) AllowEvent(id nostr.ID, reason string) error {
 	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_EVENTS)
+	event.CreatedAt = nostr.Now()
 	event.Tags = Filter(event.Tags, func(t nostr.Tag) bool {
 		return t[1] != id.Hex()
 	})
@@ -88,6 +90,7 @@ func (m *ManagementStore) AddBannedPubkey(pubkey nostr.PubKey, reason string) er
 	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_PUBKEYS)
 
 	if event.Tags.FindWithValue("banned", pubkey.Hex()) == nil {
+		event.CreatedAt = nostr.Now()
 		event.Tags = append(event.Tags, nostr.Tag{"banned", pubkey.Hex(), reason})
 
 		if err := m.Events.SignAndStoreEvent(&event, false); err != nil {
@@ -102,6 +105,7 @@ func (m *ManagementStore) RemoveBannedPubkey(pubkey nostr.PubKey) error {
 	event := m.Events.GetOrCreateApplicationSpecificData(BANNED_PUBKEYS)
 
 	if event.Tags.FindWithValue("banned", pubkey.Hex()) != nil {
+		event.CreatedAt = nostr.Now()
 		event.Tags = Filter(event.Tags, func(t nostr.Tag) bool {
 			return len(t) >= 2 && t[1] != pubkey.Hex()
 		})
@@ -181,6 +185,7 @@ func (m *ManagementStore) AddMember(pubkey nostr.PubKey) error {
 			return err
 		}
 
+		membersEvent.CreatedAt = nostr.Now()
 		membersEvent.Tags = append(membersEvent.Tags, nostr.Tag{"member", pubkey.Hex()})
 
 		if err := m.Events.SignAndStoreEvent(&membersEvent, true); err != nil {
@@ -208,6 +213,7 @@ func (m *ManagementStore) RemoveMember(pubkey nostr.PubKey) error {
 			return err
 		}
 
+		membersEvent.CreatedAt = nostr.Now()
 		membersEvent.Tags = Filter(membersEvent.Tags, func(t nostr.Tag) bool {
 			return len(t) >= 2 && t[1] != pubkey.Hex()
 		})
