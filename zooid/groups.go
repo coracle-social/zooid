@@ -184,21 +184,21 @@ func (g *GroupStore) GetMembers(h string) []nostr.PubKey {
 		},
 	}
 
-	members := make([]nostr.PubKey, 0)
+	members := make(map[nostr.PubKey]struct{})
 
 	for _, event := range Reversed(slices.Collect(g.Events.QueryEvents(filter, 0))) {
 		for tag := range event.Tags.FindAll("p") {
 			if pubkey, err := nostr.PubKeyFromHex(tag[1]); err == nil {
 				if event.Kind == nostr.KindSimpleGroupPutUser {
-					members = append(members, pubkey)
+					members[pubkey] = struct{}{}
 				} else {
-					members = Remove(members, pubkey)
+					delete(members, pubkey)
 				}
 			}
 		}
 	}
 
-	return members
+	return Keys(members)
 }
 
 func (g *GroupStore) UpdateMembersList(h string) error {
