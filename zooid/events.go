@@ -300,21 +300,25 @@ func (events *EventStore) ReplaceEvent(evt nostr.Event) error {
 		filter.Tags = nostr.TagMap{"d": []string{evt.Tags.GetD()}}
 	}
 
-	shouldStore := true
+	shouldSave := true
+	shouldDelete := make([]nostr.ID, 0)
 	for previous := range events.QueryEvents(filter, 1) {
 		if previous.CreatedAt <= evt.CreatedAt {
-			if err := events.DeleteEvent(previous.ID); err != nil {
-				return fmt.Errorf("failed to delete event for replacing: %w", err)
-			}
+			shouldDelete = append(shouldDelete, previous.ID)
 		} else {
-			shouldStore = false
+			shouldSave = false
 		}
 	}
 
-	if shouldStore {
+	if shouldSave {
 		if err := events.SaveEvent(evt); err != nil && err != eventstore.ErrDupEvent {
 			return fmt.Errorf("failed to save: %w", err)
 		}
+	}
+
+	// Wait until the end to delete old events, just in case our new one doesn't save
+	for _, id := range shouldDelete {
+		events.DeleteEvent(id)
 	}
 
 	return nil
