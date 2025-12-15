@@ -269,7 +269,7 @@ func (m *ManagementStore) GetAllowedPubkeyItems() []nip86.PubKeyReason {
 	for tag := range m.Events.GetOrCreateRelayMembersList().Tags.FindAll("member") {
 		pubkey, err := nostr.PubKeyFromHex(tag[1])
 
-		if err != nil {
+		if err == nil {
 			reasons = append(
 				reasons,
 				nip86.PubKeyReason{

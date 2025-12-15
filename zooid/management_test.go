@@ -8,10 +8,23 @@ import (
 )
 
 func createTestManagementStore() *ManagementStore {
+	relaySecret := nostr.Generate()
+	ownerPubkey := nostr.Generate().Public()
+
 	config := &Config{
 		Host:   "test.com",
-		secret: nostr.Generate(),
+		secret: relaySecret,
+		Info: struct {
+			Name        string `toml:"name"`
+			Icon        string `toml:"icon"`
+			Secret      string `toml:"secret"`
+			Pubkey      string `toml:"pubkey"`
+			Description string `toml:"description"`
+		}{
+			Pubkey: ownerPubkey.Hex(),
+		},
 	}
+
 	schema := &Schema{Name: "test_" + RandomString(8)}
 	relay := &khatru.Relay{}
 	events := &EventStore{
@@ -19,7 +32,7 @@ func createTestManagementStore() *ManagementStore {
 		Config: config,
 		Schema: schema,
 	}
-	events.Init()
+	_ = events.Init()
 
 	return &ManagementStore{
 		Config: config,
