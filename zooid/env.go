@@ -34,3 +34,12 @@ func Env(k string, fallback ...string) (v string) {
 
 	return v
 }
+
+func DebugEnabled() bool {
+	switch strings.ToLower(Env("DEBUG")) {
+	case "1", "true", "yes":
+		return true
+	default:
+		return false
+	}
+}

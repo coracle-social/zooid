@@ -51,6 +51,7 @@ func Start() {
 		log.Fatalf("Failed to scan config directory: %v", err)
 	}
 
+	loaded := 0
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -64,7 +65,13 @@ func Start() {
 			instancesByHost[instance.Config.Host] = instance
 			instancesByName[entry.Name()] = instance
 			log.Printf("Loaded %s", entry.Name())
+			loaded++
 		}
+	}
+
+	Debugf("config dir=%s loaded=%d", configDir, loaded)
+	if loaded == 0 {
+		Debugf("no relay instances loaded; add a config file under %s", configDir)
 	}
 
 	watcher, err := fsnotify.NewWatcher()

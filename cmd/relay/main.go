@@ -23,10 +23,12 @@ func main() {
 		Addr: fmt.Sprintf(":%s", port),
 		Handler: http.HandlerFunc(
 			func(w http.ResponseWriter, r *http.Request) {
+				zooid.Debugf("request host=%s method=%s path=%s", r.Host, r.Method, r.URL.Path)
 				instance, exists := zooid.Dispatch(r.Host)
 				if exists {
 					instance.Relay.ServeHTTP(w, r)
 				} else {
+					zooid.Debugf("no relay instance for host=%s", r.Host)
 					http.Error(w, "Not Found", http.StatusNotFound)
 				}
 			},

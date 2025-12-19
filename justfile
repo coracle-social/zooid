@@ -1,6 +1,9 @@
 run:
   go run cmd/relay/main.go
 
+run-debug:
+  DEBUG=true just run
+
 build:
   CGO_ENABLED=1 go build -o bin/zooid cmd/relay/main.go
 
