@@ -3,12 +3,12 @@ package zooid
 import (
 	"testing"
 
-	"fiatjaf.com/nostr"
+	"github.com/nbd-wtf/go-nostr"
 )
 
 func TestGroupStore_GetMembers_AddRemove(t *testing.T) {
 	// Minimal store setup
-	config := &Config{Host: "test.com", secret: nostr.Generate()}
+	config := &Config{Host: "test.com", secret: nostr.GeneratePrivateKey()}
 	events := createTestEventStore()
 	events.Config = config
 	_ = events.Init()
@@ -17,13 +17,14 @@ func TestGroupStore_GetMembers_AddRemove(t *testing.T) {
 	g := &GroupStore{Config: config, Events: events, Management: mgmt}
 
 	h := "group1"
-	pk := nostr.Generate().Public()
+	secret := nostr.GeneratePrivateKey()
+	pk, _ := nostr.GetPublicKey(secret)
 
 	// Add member event
 	add := nostr.Event{
 		Kind:      nostr.KindSimpleGroupPutUser,
 		CreatedAt: nostr.Now(),
-		Tags:      nostr.Tags{{"p", pk.Hex()}, {"h", h}},
+		Tags:      nostr.Tags{{"p", pk}, {"h", h}},
 	}
 	if err := events.SignAndStoreEvent(&add, false); err != nil {
 		t.Fatalf("failed to store add event: %v", err)
@@ -38,7 +39,7 @@ func TestGroupStore_GetMembers_AddRemove(t *testing.T) {
 	rem := nostr.Event{
 		Kind:      nostr.KindSimpleGroupRemoveUser,
 		CreatedAt: nostr.Now(),
-		Tags:      nostr.Tags{{"p", pk.Hex()}, {"h", h}},
+		Tags:      nostr.Tags{{"p", pk}, {"h", h}},
 	}
 	if err := events.SignAndStoreEvent(&rem, false); err != nil {
 		t.Fatalf("failed to store remove event: %v", err)

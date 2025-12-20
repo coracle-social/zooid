@@ -1,8 +1,10 @@
 package zooid
 
 import (
-	"fiatjaf.com/nostr"
-	"fiatjaf.com/nostr/nip29"
+	"context"
+
+	"github.com/nbd-wtf/go-nostr"
+	"github.com/nbd-wtf/go-nostr/nip29"
 )
 
 // Utils
@@ -29,14 +31,17 @@ type GroupStore struct {
 
 func (g *GroupStore) GetMetadata(h string) nostr.Event {
 	filter := nostr.Filter{
-		Kinds: []nostr.Kind{nostr.KindSimpleGroupMetadata},
+		Kinds: []int{nostr.KindSimpleGroupMetadata},
 		Tags: nostr.TagMap{
 			"d": []string{h},
 		},
 	}
 
-	for event := range g.Events.QueryEvents(filter, 1) {
-		return event
+	ch, err := g.Events.QueryEvents(context.Background(), filter)
+	if err == nil {
+		if event := <-ch; event != nil {
+			return *event
+		}
 	}
 
 	return nostr.Event{}
@@ -80,9 +85,16 @@ func (g *GroupStore) DeleteGroup(h string) {
 	}
 
 	for _, filter := range filters {
-		for event := range g.Events.QueryEvents(filter, 0) {
+		ch, err := g.Events.QueryEvents(context.Background(), filter)
+		if err != nil {
+			continue
+		}
+		for event := range ch {
+			if event == nil {
+				continue
+			}
 			if event.Kind != nostr.KindSimpleGroupDeleteEvent {
-				g.Events.DeleteEvent(event.ID)
+				_ = g.Events.DeleteEvent(context.Background(), event)
 			}
 		}
 	}
@@ -90,11 +102,11 @@ func (g *GroupStore) DeleteGroup(h string) {
 
 // Admins
 
-func (g *GroupStore) IsAdmin(h string, pubkey nostr.PubKey) bool {
+func (g *GroupStore) IsAdmin(h string, pubkey string) bool {
 	return g.Management.IsAdmin(pubkey)
 }
 
-func (g *GroupStore) GetAdmins(h string) []nostr.PubKey {
+func (g *GroupStore) GetAdmins(h string) []string {
 	return g.Management.GetAdmins()
 }
 
@@ -105,7 +117,7 @@ func (g *GroupStore) GenerateAdminsEvent(h string) nostr.Event {
 	}
 
 	for _, pubkey := range g.GetAdmins(h) {
-		tags = append(tags, nostr.Tag{"p", pubkey.Hex()})
+		tags = append(tags, nostr.Tag{"p", pubkey})
 	}
 
 	event := nostr.Event{
@@ -121,12 +133,12 @@ func (g *GroupStore) GenerateAdminsEvent(h string) nostr.Event {
 
 // Membership
 
-func (g *GroupStore) AddMember(h string, pubkey nostr.PubKey) error {
+func (g *GroupStore) AddMember(h string, pubkey string) error {
 	event := nostr.Event{
 		Kind:      nostr.KindSimpleGroupPutUser,
 		CreatedAt: nostr.Now(),
 		Tags: nostr.Tags{
-			nostr.Tag{"p", pubkey.Hex()},
+			nostr.Tag{"p", pubkey},
 			nostr.Tag{"h", h},
 		},
 	}
@@ -134,12 +146,12 @@ func (g *GroupStore) AddMember(h string, pubkey nostr.PubKey) error {
 	return g.Events.SignAndStoreEvent(&event, true)
 }
 
-func (g *GroupStore) RemoveMember(h string, pubkey nostr.PubKey) error {
+func (g *GroupStore) RemoveMember(h string, pubkey string) error {
 	event := nostr.Event{
 		Kind:      nostr.KindSimpleGroupRemoveUser,
 		CreatedAt: nostr.Now(),
 		Tags: nostr.Tags{
-			nostr.Tag{"p", pubkey.Hex()},
+			nostr.Tag{"p", pubkey},
 			nostr.Tag{"h", h},
 		},
 	}
@@ -147,16 +159,23 @@ func (g *GroupStore) RemoveMember(h string, pubkey nostr.PubKey) error {
 	return g.Events.SignAndStoreEvent(&event, true)
 }
 
-func (g *GroupStore) IsMember(h string, pubkey nostr.PubKey) bool {
+func (g *GroupStore) IsMember(h string, pubkey string) bool {
 	filter := nostr.Filter{
-		Kinds: []nostr.Kind{nostr.KindSimpleGroupPutUser, nostr.KindSimpleGroupRemoveUser},
+		Kinds: []int{nostr.KindSimpleGroupPutUser, nostr.KindSimpleGroupRemoveUser},
 		Tags: nostr.TagMap{
-			"p": []string{pubkey.Hex()},
+			"p": []string{pubkey},
 			"h": []string{h},
 		},
 	}
 
-	for event := range g.Events.QueryEvents(filter, 1) {
+	ch, err := g.Events.QueryEvents(context.Background(), filter)
+	if err != nil {
+		return false
+	}
+	for event := range ch {
+		if event == nil {
+			continue
+		}
 		if event.Kind == nostr.KindSimpleGroupPutUser {
 			return true
 		}
@@ -169,24 +188,30 @@ func (g *GroupStore) IsMember(h string, pubkey nostr.PubKey) bool {
 	return false
 }
 
-func (g *GroupStore) GetMembers(h string) []nostr.PubKey {
+func (g *GroupStore) GetMembers(h string) []string {
 	filter := nostr.Filter{
-		Kinds: []nostr.Kind{nostr.KindSimpleGroupPutUser, nostr.KindSimpleGroupRemoveUser},
+		Kinds: []int{nostr.KindSimpleGroupPutUser, nostr.KindSimpleGroupRemoveUser},
 		Tags: nostr.TagMap{
 			"h": []string{h},
 		},
 	}
 
-	members := make([]nostr.PubKey, 0)
+	members := make([]string, 0)
 
-	for event := range g.Events.QueryEvents(filter, 0) {
+	ch, err := g.Events.QueryEvents(context.Background(), filter)
+	if err != nil {
+		return members
+	}
+	for event := range ch {
+		if event == nil {
+			continue
+		}
 		for tag := range event.Tags.FindAll("p") {
-			if pubkey, err := nostr.PubKeyFromHex(tag[1]); err == nil {
-				if event.Kind == nostr.KindSimpleGroupPutUser {
-					members = append(members, pubkey)
-				} else {
-					members = Remove(members, pubkey)
-				}
+			pubkey := tag[1]
+			if event.Kind == nostr.KindSimpleGroupPutUser {
+				members = append(members, pubkey)
+			} else {
+				members = Remove(members, pubkey)
 			}
 		}
 	}
@@ -201,7 +226,7 @@ func (g *GroupStore) GenerateMembersEvent(h string) nostr.Event {
 	}
 
 	for _, pubkey := range g.GetMembers(h) {
-		tags = append(tags, nostr.Tag{"p", pubkey.Hex()})
+		tags = append(tags, nostr.Tag{"p", pubkey})
 	}
 
 	event := nostr.Event{
@@ -217,7 +242,7 @@ func (g *GroupStore) GenerateMembersEvent(h string) nostr.Event {
 
 // Other stuff
 
-func (g *GroupStore) HasAccess(h string, pubkey nostr.PubKey) bool {
+func (g *GroupStore) HasAccess(h string, pubkey string) bool {
 	if !HasTag(g.GetMetadata(h).Tags, "closed") {
 		return true
 	}

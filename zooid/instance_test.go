@@ -3,13 +3,13 @@ package zooid
 import (
 	"testing"
 
-	"fiatjaf.com/nostr"
-	"fiatjaf.com/nostr/khatru"
+	"github.com/fiatjaf/khatru"
+	"github.com/nbd-wtf/go-nostr"
 )
 
 func createTestInstance() *Instance {
-	ownerSecret := nostr.Generate()
-	ownerPubkey := ownerSecret.Public()
+	ownerSecret := nostr.GeneratePrivateKey()
+	ownerPubkey, _ := nostr.GetPublicKey(ownerSecret)
 
 	config := &Config{
 		Host:   "test.com",
@@ -22,11 +22,11 @@ func createTestInstance() *Instance {
 			Description string `toml:"description"`
 		}{
 			Name:   "Test Relay",
-			Pubkey: ownerPubkey.Hex(),
+			Pubkey: ownerPubkey,
 		},
 		Roles: map[string]Role{
 			"admin": {
-				Pubkeys:   []string{ownerPubkey.Hex()},
+				Pubkeys:   []string{ownerPubkey},
 				CanManage: true,
 				CanInvite: true,
 			},
@@ -63,8 +63,8 @@ func createTestInstance() *Instance {
 func TestInstance_AllowRecipientEvent(t *testing.T) {
 	instance := createTestInstance()
 
-	userSecret := nostr.Generate()
-	userPubkey := userSecret.Public()
+	userSecret := nostr.GeneratePrivateKey()
+	userPubkey, _ := nostr.GetPublicKey(userSecret)
 
 	// Add user as member
 	instance.Management.AddMember(userPubkey)
@@ -78,7 +78,7 @@ func TestInstance_AllowRecipientEvent(t *testing.T) {
 			name: "zap event with valid recipient",
 			event: nostr.Event{
 				Kind: nostr.KindZap,
-				Tags: nostr.Tags{{"p", userPubkey.Hex()}},
+				Tags: nostr.Tags{{"p", userPubkey}},
 			},
 			want: true,
 		},
@@ -86,7 +86,7 @@ func TestInstance_AllowRecipientEvent(t *testing.T) {
 			name: "gift wrap event with valid recipient",
 			event: nostr.Event{
 				Kind: nostr.KindGiftWrap,
-				Tags: nostr.Tags{{"p", userPubkey.Hex()}},
+				Tags: nostr.Tags{{"p", userPubkey}},
 			},
 			want: true,
 		},
@@ -94,7 +94,7 @@ func TestInstance_AllowRecipientEvent(t *testing.T) {
 			name: "zap event with invalid recipient",
 			event: nostr.Event{
 				Kind: nostr.KindZap,
-				Tags: nostr.Tags{{"p", nostr.Generate().Public().Hex()}},
+				Tags: nostr.Tags{{"p", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"}},
 			},
 			want: false,
 		},
@@ -102,7 +102,7 @@ func TestInstance_AllowRecipientEvent(t *testing.T) {
 			name: "text note event",
 			event: nostr.Event{
 				Kind: nostr.KindTextNote,
-				Tags: nostr.Tags{{"p", userPubkey.Hex()}},
+				Tags: nostr.Tags{{"p", userPubkey}},
 			},
 			want: false,
 		},
@@ -118,7 +118,7 @@ func TestInstance_AllowRecipientEvent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := instance.AllowRecipientEvent(tt.event)
+			result := instance.AllowRecipientEvent(&tt.event)
 			if result != tt.want {
 				t.Errorf("AllowRecipientEvent() = %v, want %v", result, tt.want)
 			}
@@ -129,7 +129,8 @@ func TestInstance_AllowRecipientEvent(t *testing.T) {
 func TestInstance_GenerateInviteEvent(t *testing.T) {
 	instance := createTestInstance()
 
-	userPubkey := nostr.Generate().Public()
+	userSecret := nostr.GeneratePrivateKey()
+	userPubkey, _ := nostr.GetPublicKey(userSecret)
 
 	// Generate invite event
 	inviteEvent := instance.GenerateInviteEvent(userPubkey)
@@ -150,7 +151,7 @@ func TestInstance_GenerateInviteEvent(t *testing.T) {
 	}
 
 	pTag := inviteEvent.Tags.Find("p")
-	if pTag == nil || pTag[1] != userPubkey.Hex() {
+	if pTag == nil || pTag[1] != userPubkey {
 		t.Error("GenerateInviteEvent() should have correct p tag")
 	}
 }

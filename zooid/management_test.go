@@ -3,13 +3,14 @@ package zooid
 import (
 	"testing"
 
-	"fiatjaf.com/nostr"
-	"fiatjaf.com/nostr/khatru"
+	"github.com/fiatjaf/khatru"
+	"github.com/nbd-wtf/go-nostr"
 )
 
 func createTestManagementStore() *ManagementStore {
-	relaySecret := nostr.Generate()
-	ownerPubkey := nostr.Generate().Public()
+	relaySecret := nostr.GeneratePrivateKey()
+	ownerSecret := nostr.GeneratePrivateKey()
+	ownerPubkey, _ := nostr.GetPublicKey(ownerSecret)
 
 	config := &Config{
 		Host:   "test.com",
@@ -21,7 +22,7 @@ func createTestManagementStore() *ManagementStore {
 			Pubkey      string `toml:"pubkey"`
 			Description string `toml:"description"`
 		}{
-			Pubkey: ownerPubkey.Hex(),
+			Pubkey: ownerPubkey,
 		},
 	}
 
@@ -43,7 +44,8 @@ func createTestManagementStore() *ManagementStore {
 func TestManagementStore_BanPubkey(t *testing.T) {
 	mgmt := createTestManagementStore()
 
-	pubkey := nostr.Generate().Public()
+	secret := nostr.GeneratePrivateKey()
+	pubkey, _ := nostr.GetPublicKey(secret)
 	reason := "spam"
 
 	// Note: BanPubkey might return "duplicate event" error due to implementation
@@ -72,7 +74,8 @@ func TestManagementStore_BanPubkey(t *testing.T) {
 func TestManagementStore_AllowPubkey(t *testing.T) {
 	mgmt := createTestManagementStore()
 
-	pubkey := nostr.Generate().Public()
+	secret := nostr.GeneratePrivateKey()
+	pubkey, _ := nostr.GetPublicKey(secret)
 
 	// Ban then allow
 	mgmt.BanPubkey(pubkey, "test")
@@ -91,7 +94,7 @@ func TestManagementStore_AllowPubkey(t *testing.T) {
 func TestManagementStore_BanEvent(t *testing.T) {
 	mgmt := createTestManagementStore()
 
-	eventID := nostr.MustIDFromHex("1234567890123456789012345678901234567890123456789012345678901234")
+	eventID := "1234567890123456789012345678901234567890123456789012345678901234"
 	reason := "inappropriate"
 
 	mgmt.BanEvent(eventID, reason)
@@ -105,7 +108,7 @@ func TestManagementStore_BanEvent(t *testing.T) {
 	bannedItems := mgmt.GetBannedEventItems()
 	itemFound := false
 	for _, item := range bannedItems {
-		if item.ID == eventID.Hex() && item.Reason == reason {
+		if item.ID == eventID && item.Reason == reason {
 			itemFound = true
 			break
 		}
@@ -118,7 +121,7 @@ func TestManagementStore_BanEvent(t *testing.T) {
 func TestManagementStore_AllowEvent(t *testing.T) {
 	mgmt := createTestManagementStore()
 
-	eventID := nostr.MustIDFromHex("1234567890123456789012345678901234567890123456789012345678901234")
+	eventID := "1234567890123456789012345678901234567890123456789012345678901234"
 
 	// Ban then allow
 	mgmt.BanEvent(eventID, "test")
@@ -137,7 +140,8 @@ func TestManagementStore_AllowEvent(t *testing.T) {
 func TestManagementStore_PubkeyIsBanned_NotBanned(t *testing.T) {
 	mgmt := createTestManagementStore()
 
-	pubkey := nostr.Generate().Public()
+	secret := nostr.GeneratePrivateKey()
+	pubkey, _ := nostr.GetPublicKey(secret)
 
 	if mgmt.PubkeyIsBanned(pubkey) {
 		t.Error("PubkeyIsBanned() should return false for non-banned pubkey")
@@ -147,7 +151,7 @@ func TestManagementStore_PubkeyIsBanned_NotBanned(t *testing.T) {
 func TestManagementStore_EventIsBanned_NotBanned(t *testing.T) {
 	mgmt := createTestManagementStore()
 
-	eventID := nostr.MustIDFromHex("abcdef1234567890123456789012345678901234567890123456789012345678")
+	eventID := "abcdef1234567890123456789012345678901234567890123456789012345678"
 
 	if mgmt.EventIsBanned(eventID) {
 		t.Error("EventIsBanned() should return false for non-banned event")

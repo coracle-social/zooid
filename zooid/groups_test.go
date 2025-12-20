@@ -3,7 +3,7 @@ package zooid
 import (
 	"testing"
 
-	"fiatjaf.com/nostr"
+	"github.com/nbd-wtf/go-nostr"
 )
 
 func TestGetGroupIDFromEvent(t *testing.T) {

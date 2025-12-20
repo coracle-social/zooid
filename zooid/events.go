@@ -1,16 +1,15 @@
 package zooid
 
 import (
-	"encoding/hex"
+	"context"
 	"encoding/json"
 	"fmt"
-	"iter"
 
-	"fiatjaf.com/nostr"
-	"fiatjaf.com/nostr/eventstore"
-	"fiatjaf.com/nostr/khatru"
 	"github.com/Masterminds/squirrel"
+	"github.com/fiatjaf/eventstore"
+	"github.com/fiatjaf/khatru"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/nbd-wtf/go-nostr"
 )
 
 type EventStore struct {
@@ -96,68 +95,58 @@ func (events *EventStore) Close() {
 	// Never close the database, since it's a shared resource
 }
 
-func (events *EventStore) QueryEvents(filter nostr.Filter, maxLimit int) iter.Seq[nostr.Event] {
-	return func(yield func(nostr.Event) bool) {
-		if filter.LimitZero {
-			return
-		}
+func (events *EventStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan *nostr.Event, error) {
+	ch := make(chan *nostr.Event)
+	if filter.LimitZero {
+		close(ch)
+		return ch, nil
+	}
 
-		if maxLimit > 0 && maxLimit < filter.Limit {
-			filter.Limit = maxLimit
-		}
+	rows, err := events.buildSelectQuery(filter).RunWith(GetDb()).Query()
+	if err != nil {
+		close(ch)
+		return nil, err
+	}
 
-		rows, err := events.buildSelectQuery(filter).RunWith(GetDb()).Query()
-		if err != nil {
-			return
-		}
+	go func() {
 		defer rows.Close()
+		defer close(ch)
 
 		for rows.Next() {
-			var evt nostr.Event
-			var idStr, pubkeyStr, sigStr, tagsStr string
-			var createdAt int64
-			var kind int
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
 
-			err := rows.Scan(&idStr, &createdAt, &kind, &pubkeyStr, &evt.Content, &tagsStr, &sigStr)
+			var (
+				evt       nostr.Event
+				tagsStr   string
+				createdAt int64
+				kind      int
+			)
+
+			err := rows.Scan(&evt.ID, &createdAt, &kind, &evt.PubKey, &evt.Content, &tagsStr, &evt.Sig)
 			if err != nil {
 				continue
 			}
 
-			// Parse ID
-			if id, err := nostr.IDFromHex(idStr); err == nil {
-				evt.ID = id
-			} else {
-				continue
-			}
-
-			// Parse PubKey
-			if pubkey, err := nostr.PubKeyFromHex(pubkeyStr); err == nil {
-				evt.PubKey = pubkey
-			} else {
-				continue
-			}
-
-			// Parse Signature
-			if sigBytes, err := hex.DecodeString(sigStr); err == nil && len(sigBytes) == 64 {
-				copy(evt.Sig[:], sigBytes)
-			} else {
-				continue
-			}
-
-			// Set other fields
 			evt.CreatedAt = nostr.Timestamp(createdAt)
-			evt.Kind = nostr.Kind(kind)
+			evt.Kind = kind
 
-			// Parse Tags
 			if err := json.Unmarshal([]byte(tagsStr), &evt.Tags); err != nil {
 				continue
 			}
 
-			if !yield(evt) {
+			select {
+			case ch <- &evt:
+			case <-ctx.Done():
 				return
 			}
 		}
-	}
+	}()
+
+	return ch, nil
 }
 
 func (events *EventStore) buildSelectQuery(filter nostr.Filter) squirrel.SelectBuilder {
@@ -177,7 +166,7 @@ func (events *EventStore) buildSelectQuery(filter nostr.Filter) squirrel.SelectB
 	if len(filter.IDs) > 0 {
 		idStrs := make([]interface{}, len(filter.IDs))
 		for i, id := range filter.IDs {
-			idStrs[i] = id.Hex()
+			idStrs[i] = id
 		}
 		qb = qb.Where(squirrel.Eq{"id": idStrs})
 	}
@@ -185,7 +174,7 @@ func (events *EventStore) buildSelectQuery(filter nostr.Filter) squirrel.SelectB
 	if len(filter.Authors) > 0 {
 		authorStrs := make([]interface{}, len(filter.Authors))
 		for i, author := range filter.Authors {
-			authorStrs[i] = author.Hex()
+			authorStrs[i] = author
 		}
 		qb = qb.Where(squirrel.Eq{"pubkey": authorStrs})
 	}
@@ -193,17 +182,17 @@ func (events *EventStore) buildSelectQuery(filter nostr.Filter) squirrel.SelectB
 	if len(filter.Kinds) > 0 {
 		kindInts := make([]interface{}, len(filter.Kinds))
 		for i, kind := range filter.Kinds {
-			kindInts[i] = int(kind)
+			kindInts[i] = kind
 		}
 		qb = qb.Where(squirrel.Eq{"kind": kindInts})
 	}
 
-	if filter.Since != 0 {
-		qb = qb.Where(squirrel.GtOrEq{"created_at": filter.Since})
+	if filter.Since != nil {
+		qb = qb.Where(squirrel.GtOrEq{"created_at": *filter.Since})
 	}
 
-	if filter.Until != 0 {
-		qb = qb.Where(squirrel.LtOrEq{"created_at": filter.Until})
+	if filter.Until != nil {
+		qb = qb.Where(squirrel.LtOrEq{"created_at": *filter.Until})
 	}
 
 	for tagKey, tagValues := range filter.Tags {
@@ -236,16 +225,25 @@ func (events *EventStore) buildSelectQuery(filter nostr.Filter) squirrel.SelectB
 	return qb
 }
 
-func (events *EventStore) DeleteEvent(id nostr.ID) error {
-	_, err := squirrel.Delete(events.Schema.Prefix("events")).Where(squirrel.Eq{"id": id.Hex()}).RunWith(GetDb()).Exec()
-
+func (events *EventStore) deleteEventByID(id string) error {
+	_, err := squirrel.Delete(events.Schema.Prefix("events")).Where(squirrel.Eq{"id": id}).RunWith(GetDb()).Exec()
 	return err
 }
 
-func (events *EventStore) SaveEvent(evt nostr.Event) error {
+func (events *EventStore) DeleteEvent(ctx context.Context, evt *nostr.Event) error {
+	if evt == nil {
+		return nil
+	}
+	return events.deleteEventByID(evt.ID)
+}
+
+func (events *EventStore) SaveEvent(ctx context.Context, evt *nostr.Event) error {
+	if evt == nil {
+		return nil
+	}
 	// Check if event already exists
 	var existingID string
-	qb := squirrel.Select("id").From(events.Schema.Prefix("events")).Where(squirrel.Eq{"id": evt.ID.Hex()})
+	qb := squirrel.Select("id").From(events.Schema.Prefix("events")).Where(squirrel.Eq{"id": evt.ID})
 	err := qb.RunWith(GetDb()).QueryRow().Scan(&existingID)
 	if err == nil {
 		return eventstore.ErrDupEvent
@@ -261,13 +259,13 @@ func (events *EventStore) SaveEvent(evt nostr.Event) error {
 	insertQb := squirrel.Insert(events.Schema.Prefix("events")).
 		Columns("id", "created_at", "kind", "pubkey", "content", "tags", "sig").
 		Values(
-			evt.ID.Hex(),
+			evt.ID,
 			int64(evt.CreatedAt),
-			int(evt.Kind),
-			evt.PubKey.Hex(),
+			evt.Kind,
+			evt.PubKey,
 			evt.Content,
 			string(tagsJSON),
-			hex.EncodeToString(evt.Sig[:]),
+			evt.Sig,
 		)
 
 	_, err = insertQb.RunWith(GetDb()).Exec()
@@ -281,7 +279,7 @@ func (events *EventStore) SaveEvent(evt nostr.Event) error {
 		if len(tag) >= 2 && len(tag[0]) == 1 {
 			tagQb := squirrel.Insert(events.Schema.Prefix("event_tags")).
 				Columns("event_id", "key", "value").
-				Values(evt.ID.Hex(), tag[0], tag[1])
+				Values(evt.ID, tag[0], tag[1])
 
 			_, err := tagQb.RunWith(GetDb()).Exec()
 			if err != nil {
@@ -294,16 +292,26 @@ func (events *EventStore) SaveEvent(evt nostr.Event) error {
 	return nil
 }
 
-func (events *EventStore) ReplaceEvent(evt nostr.Event) error {
-	filter := nostr.Filter{Kinds: []nostr.Kind{evt.Kind}, Authors: []nostr.PubKey{evt.PubKey}}
-	if evt.Kind.IsAddressable() {
+func (events *EventStore) ReplaceEvent(ctx context.Context, evt *nostr.Event) error {
+	if evt == nil {
+		return nil
+	}
+	filter := nostr.Filter{Kinds: []int{evt.Kind}, Authors: []string{evt.PubKey}, Limit: 1}
+	if nostr.IsAddressableKind(evt.Kind) {
 		filter.Tags = nostr.TagMap{"d": []string{evt.Tags.GetD()}}
 	}
 
 	shouldStore := true
-	for previous := range events.QueryEvents(filter, 1) {
+	ch, err := events.QueryEvents(ctx, filter)
+	if err != nil {
+		return err
+	}
+	for previous := range ch {
+		if previous == nil {
+			continue
+		}
 		if previous.CreatedAt <= evt.CreatedAt {
-			if err := events.DeleteEvent(previous.ID); err != nil {
+			if err := events.DeleteEvent(ctx, previous); err != nil {
 				return fmt.Errorf("failed to delete event for replacing: %w", err)
 			}
 		} else {
@@ -312,7 +320,7 @@ func (events *EventStore) ReplaceEvent(evt nostr.Event) error {
 	}
 
 	if shouldStore {
-		if err := events.SaveEvent(evt); err != nil && err != eventstore.ErrDupEvent {
+		if err := events.SaveEvent(ctx, evt); err != nil && err != eventstore.ErrDupEvent {
 			return fmt.Errorf("failed to save: %w", err)
 		}
 	}
@@ -320,14 +328,14 @@ func (events *EventStore) ReplaceEvent(evt nostr.Event) error {
 	return nil
 }
 
-func (events *EventStore) CountEvents(filter nostr.Filter) (uint32, error) {
+func (events *EventStore) CountEvents(ctx context.Context, filter nostr.Filter) (int64, error) {
 	// Build a count query based on the select query but with COUNT(*) instead
 	qb := events.buildSelectQuery(filter)
 
 	// Convert the select query to a count query
 	countQb := squirrel.Select("COUNT(*)").FromSelect(qb, "subquery")
 
-	var count uint32
+	var count int64
 	err := countQb.RunWith(GetDb()).QueryRow().Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count events: %w", err)
@@ -338,16 +346,20 @@ func (events *EventStore) CountEvents(filter nostr.Filter) (uint32, error) {
 
 // Non-eventstore methods
 
-func (events *EventStore) StoreEvent(event nostr.Event) error {
-	if event.Kind.IsRegular() {
-		if err := events.SaveEvent(event); err != nil && err != eventstore.ErrDupEvent {
+func (events *EventStore) StoreEvent(ctx context.Context, event *nostr.Event) error {
+	if event == nil {
+		return nil
+	}
+
+	if nostr.IsRegularKind(event.Kind) {
+		if err := events.SaveEvent(ctx, event); err != nil && err != eventstore.ErrDupEvent {
 			return err
 		}
 
 		return nil
 	}
 
-	return events.ReplaceEvent(event)
+	return events.ReplaceEvent(ctx, event)
 }
 
 func (events *EventStore) SignAndStoreEvent(event *nostr.Event, broadcast bool) error {
@@ -355,12 +367,12 @@ func (events *EventStore) SignAndStoreEvent(event *nostr.Event, broadcast bool) 
 		return err
 	}
 
-	if err := events.StoreEvent(*event); err != nil {
+	if err := events.StoreEvent(context.Background(), event); err != nil {
 		return err
 	}
 
 	if broadcast {
-		events.Relay.BroadcastEvent(*event)
+		events.Relay.BroadcastEvent(event)
 	}
 
 	return nil
@@ -368,14 +380,17 @@ func (events *EventStore) SignAndStoreEvent(event *nostr.Event, broadcast bool) 
 
 func (events *EventStore) GetOrCreateApplicationSpecificData(d string) nostr.Event {
 	filter := nostr.Filter{
-		Kinds: []nostr.Kind{nostr.KindApplicationSpecificData},
+		Kinds: []int{nostr.KindApplicationSpecificData},
 		Tags: nostr.TagMap{
 			"d": []string{d},
 		},
 	}
 
-	for event := range events.QueryEvents(filter, 1) {
-		return event
+	ch, err := events.QueryEvents(context.Background(), filter)
+	if err == nil {
+		if event := <-ch; event != nil {
+			return *event
+		}
 	}
 
 	return nostr.Event{
@@ -389,11 +404,14 @@ func (events *EventStore) GetOrCreateApplicationSpecificData(d string) nostr.Eve
 
 func (events *EventStore) GetOrCreateRelayMembersList() nostr.Event {
 	filter := nostr.Filter{
-		Kinds: []nostr.Kind{RELAY_MEMBERS},
+		Kinds: []int{RELAY_MEMBERS},
 	}
 
-	for event := range events.QueryEvents(filter, 1) {
-		return event
+	ch, err := events.QueryEvents(context.Background(), filter)
+	if err == nil {
+		if event := <-ch; event != nil {
+			return *event
+		}
 	}
 
 	return nostr.Event{

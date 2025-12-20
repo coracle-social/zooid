@@ -4,11 +4,10 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"net/url"
 
-	"fiatjaf.com/nostr"
-	"fiatjaf.com/nostr/eventstore"
-	"fiatjaf.com/nostr/khatru/blossom"
+	"github.com/fiatjaf/eventstore"
+	"github.com/fiatjaf/khatru/blossom"
+	"github.com/nbd-wtf/go-nostr"
 	"github.com/spf13/afero"
 )
 
@@ -27,7 +26,7 @@ func (bl *BlossomStore) Enable(instance *Instance) {
 		ServiceURL: "https://" + bl.Config.Host,
 	}
 
-	backend.StoreBlob = func(ctx context.Context, sha256 string, ext string, body []byte) error {
+	backend.StoreBlob = append(backend.StoreBlob, func(ctx context.Context, sha256 string, ext string, body []byte) error {
 		file, err := fs.Create(dir + "/" + sha256)
 		if err != nil {
 			return err
@@ -38,21 +37,21 @@ func (bl *BlossomStore) Enable(instance *Instance) {
 		}
 
 		return nil
-	}
+	})
 
-	backend.LoadBlob = func(ctx context.Context, sha256 string, ext string) (io.ReadSeeker, *url.URL, error) {
+	backend.LoadBlob = append(backend.LoadBlob, func(ctx context.Context, sha256 string, ext string) (io.ReadSeeker, error) {
 		file, err := fs.Open(dir + "/" + sha256)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
-		return file, nil, nil
-	}
+		return file, nil
+	})
 
-	backend.DeleteBlob = func(ctx context.Context, sha256 string, ext string) error {
+	backend.DeleteBlob = append(backend.DeleteBlob, func(ctx context.Context, sha256 string, ext string) error {
 		return fs.Remove(dir + "/" + sha256)
-	}
+	})
 
-	backend.RejectUpload = func(ctx context.Context, auth *nostr.Event, size int, ext string) (bool, string, int) {
+	backend.RejectUpload = append(backend.RejectUpload, func(ctx context.Context, auth *nostr.Event, size int, ext string) (bool, string, int) {
 		if size > 10*1024*1024 {
 			return true, "file too large", 413
 		}
@@ -62,29 +61,29 @@ func (bl *BlossomStore) Enable(instance *Instance) {
 		}
 
 		return false, ext, size
-	}
+	})
 
-	backend.RejectGet = func(ctx context.Context, auth *nostr.Event, sha256 string, ext string) (bool, string, int) {
+	backend.RejectGet = append(backend.RejectGet, func(ctx context.Context, auth *nostr.Event, sha256 string, ext string) (bool, string, int) {
 		if auth == nil || !instance.Management.IsMember(auth.PubKey) {
 			return true, "unauthorized", 403
 		}
 
 		return false, "", 200
-	}
+	})
 
-	backend.RejectList = func(ctx context.Context, auth *nostr.Event, pubkey nostr.PubKey) (bool, string, int) {
+	backend.RejectList = append(backend.RejectList, func(ctx context.Context, auth *nostr.Event, pubkey string) (bool, string, int) {
 		if auth == nil || !instance.Management.IsMember(auth.PubKey) {
 			return true, "unauthorized", 403
 		}
 
 		return false, "", 200
-	}
+	})
 
-	backend.RejectDelete = func(ctx context.Context, auth *nostr.Event, sha256 string, ext string) (bool, string, int) {
+	backend.RejectDelete = append(backend.RejectDelete, func(ctx context.Context, auth *nostr.Event, sha256 string, ext string) (bool, string, int) {
 		if auth == nil || !instance.Management.IsMember(auth.PubKey) {
 			return true, "unauthorized", 403
 		}
 
 		return false, "", 200
-	}
+	})
 }

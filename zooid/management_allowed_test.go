@@ -3,13 +3,14 @@ package zooid
 import (
 	"testing"
 
-	"fiatjaf.com/nostr"
+	"github.com/nbd-wtf/go-nostr"
 )
 
 func TestManagementStore_GetAllowedPubkeyItems_IncludesMembers(t *testing.T) {
 	mgmt := createTestManagementStore()
 
-	pk := nostr.Generate().Public()
+	secret := nostr.GeneratePrivateKey()
+	pk, _ := nostr.GetPublicKey(secret)
 	if err := mgmt.AddMember(pk); err != nil {
 		t.Fatalf("AddMember failed: %v", err)
 	}
@@ -24,6 +25,6 @@ func TestManagementStore_GetAllowedPubkeyItems_IncludesMembers(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatalf("expected allowed list to include added member %s", pk.Hex())
+		t.Fatalf("expected allowed list to include added member %s", pk)
 	}
 }

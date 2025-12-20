@@ -3,12 +3,12 @@ package zooid
 import (
 	"testing"
 
-	"fiatjaf.com/nostr"
+	"github.com/nbd-wtf/go-nostr"
 )
 
 func TestConfig_IsOwner(t *testing.T) {
-	ownerPubkey := nostr.MustPubKeyFromHex("1234567890123456789012345678901234567890123456789012345678901234")
-	otherPubkey := nostr.MustPubKeyFromHex("abcdef1234567890123456789012345678901234567890123456789012345678")
+	ownerPubkey := "1234567890123456789012345678901234567890123456789012345678901234"
+	otherPubkey := "abcdef1234567890123456789012345678901234567890123456789012345678"
 
 	config := &Config{
 		Info: struct {
@@ -18,7 +18,7 @@ func TestConfig_IsOwner(t *testing.T) {
 			Pubkey      string `toml:"pubkey"`
 			Description string `toml:"description"`
 		}{
-			Pubkey: ownerPubkey.Hex(),
+			Pubkey: ownerPubkey,
 		},
 	}
 
@@ -32,9 +32,9 @@ func TestConfig_IsOwner(t *testing.T) {
 }
 
 func TestConfig_IsSelf(t *testing.T) {
-	secret := nostr.Generate()
-	selfPubkey := secret.Public()
-	otherPubkey := nostr.MustPubKeyFromHex("abcdef1234567890123456789012345678901234567890123456789012345678")
+	secret := nostr.GeneratePrivateKey()
+	selfPubkey, _ := nostr.GetPublicKey(secret)
+	otherPubkey := "abcdef1234567890123456789012345678901234567890123456789012345678"
 
 	config := &Config{
 		secret: secret,
@@ -50,8 +50,8 @@ func TestConfig_IsSelf(t *testing.T) {
 }
 
 func TestConfig_GetAllRoles(t *testing.T) {
-	pubkey1 := nostr.MustPubKeyFromHex("1234567890123456789012345678901234567890123456789012345678901234")
-	pubkey2 := nostr.MustPubKeyFromHex("abcdef1234567890123456789012345678901234567890123456789012345678")
+	pubkey1 := "1234567890123456789012345678901234567890123456789012345678901234"
+	pubkey2 := "abcdef1234567890123456789012345678901234567890123456789012345678"
 
 	config := &Config{
 		Roles: map[string]Role{
@@ -60,11 +60,11 @@ func TestConfig_GetAllRoles(t *testing.T) {
 				CanInvite: true,
 			},
 			"admin": {
-				Pubkeys:   []string{pubkey1.Hex()},
+				Pubkeys:   []string{pubkey1},
 				CanManage: true,
 			},
 			"moderator": {
-				Pubkeys:   []string{pubkey2.Hex()},
+				Pubkeys:   []string{pubkey2},
 				CanInvite: true,
 			},
 		},
@@ -82,12 +82,12 @@ func TestConfig_GetAllRoles(t *testing.T) {
 }
 
 func TestConfig_CanManage(t *testing.T) {
-	ownerPubkey := nostr.MustPubKeyFromHex("9999999999999999999999999999999999999999999999999999999999999999")
-	adminPubkey := nostr.MustPubKeyFromHex("1234567890123456789012345678901234567890123456789012345678901234")
-	userPubkey := nostr.MustPubKeyFromHex("abcdef1234567890123456789012345678901234567890123456789012345678")
+	ownerPubkey := "9999999999999999999999999999999999999999999999999999999999999999"
+	adminPubkey := "1234567890123456789012345678901234567890123456789012345678901234"
+	userPubkey := "abcdef1234567890123456789012345678901234567890123456789012345678"
 
 	config := &Config{
-		secret: nostr.Generate(),
+		secret: nostr.GeneratePrivateKey(),
 		Info: struct {
 			Name        string `toml:"name"`
 			Icon        string `toml:"icon"`
@@ -95,15 +95,15 @@ func TestConfig_CanManage(t *testing.T) {
 			Pubkey      string `toml:"pubkey"`
 			Description string `toml:"description"`
 		}{
-			Pubkey: ownerPubkey.Hex(),
+			Pubkey: ownerPubkey,
 		},
 		Roles: map[string]Role{
 			"admin": {
-				Pubkeys:   []string{adminPubkey.Hex()},
+				Pubkeys:   []string{adminPubkey},
 				CanManage: true,
 			},
 			"user": {
-				Pubkeys:   []string{userPubkey.Hex()},
+				Pubkeys:   []string{userPubkey},
 				CanManage: false,
 			},
 		},
@@ -119,12 +119,12 @@ func TestConfig_CanManage(t *testing.T) {
 }
 
 func TestConfig_CanInvite(t *testing.T) {
-	ownerPubkey := nostr.MustPubKeyFromHex("9999999999999999999999999999999999999999999999999999999999999999")
-	inviterPubkey := nostr.MustPubKeyFromHex("1234567890123456789012345678901234567890123456789012345678901234")
-	userPubkey := nostr.MustPubKeyFromHex("abcdef1234567890123456789012345678901234567890123456789012345678")
+	ownerPubkey := "9999999999999999999999999999999999999999999999999999999999999999"
+	inviterPubkey := "1234567890123456789012345678901234567890123456789012345678901234"
+	userPubkey := "abcdef1234567890123456789012345678901234567890123456789012345678"
 
 	config := &Config{
-		secret: nostr.Generate(),
+		secret: nostr.GeneratePrivateKey(),
 		Info: struct {
 			Name        string `toml:"name"`
 			Icon        string `toml:"icon"`
@@ -132,15 +132,15 @@ func TestConfig_CanInvite(t *testing.T) {
 			Pubkey      string `toml:"pubkey"`
 			Description string `toml:"description"`
 		}{
-			Pubkey: ownerPubkey.Hex(),
+			Pubkey: ownerPubkey,
 		},
 		Roles: map[string]Role{
 			"inviter": {
-				Pubkeys:   []string{inviterPubkey.Hex()},
+				Pubkeys:   []string{inviterPubkey},
 				CanInvite: true,
 			},
 			"user": {
-				Pubkeys:   []string{userPubkey.Hex()},
+				Pubkeys:   []string{userPubkey},
 				CanInvite: false,
 			},
 		},
@@ -156,11 +156,11 @@ func TestConfig_CanInvite(t *testing.T) {
 }
 
 func TestConfig_MemberRole(t *testing.T) {
-	ownerPubkey := nostr.MustPubKeyFromHex("9999999999999999999999999999999999999999999999999999999999999999")
-	anyPubkey := nostr.MustPubKeyFromHex("1234567890123456789012345678901234567890123456789012345678901234")
+	ownerPubkey := "9999999999999999999999999999999999999999999999999999999999999999"
+	anyPubkey := "1234567890123456789012345678901234567890123456789012345678901234"
 
 	config := &Config{
-		secret: nostr.Generate(),
+		secret: nostr.GeneratePrivateKey(),
 		Info: struct {
 			Name        string `toml:"name"`
 			Icon        string `toml:"icon"`
@@ -168,7 +168,7 @@ func TestConfig_MemberRole(t *testing.T) {
 			Pubkey      string `toml:"pubkey"`
 			Description string `toml:"description"`
 		}{
-			Pubkey: ownerPubkey.Hex(),
+			Pubkey: ownerPubkey,
 		},
 		Roles: map[string]Role{
 			"member": {

@@ -1,11 +1,12 @@
 package zooid
 
 import (
-	"fiatjaf.com/nostr"
 	"fmt"
-	"github.com/BurntSushi/toml"
 	"path/filepath"
 	"slices"
+
+	"github.com/BurntSushi/toml"
+	"github.com/nbd-wtf/go-nostr"
 )
 
 type Role struct {
@@ -48,7 +49,7 @@ type Config struct {
 	Roles map[string]Role `toml:"roles"`
 
 	// Private/parsed values
-	secret nostr.SecretKey
+	secret string
 }
 
 func LoadConfig(filename string) (*Config, error) {
@@ -67,8 +68,8 @@ func LoadConfig(filename string) (*Config, error) {
 		return nil, fmt.Errorf("schema is required")
 	}
 
-	secret, err := nostr.SecretKeyFromHex(config.Secret)
-	if err != nil {
+	secret := config.Secret
+	if _, err := nostr.GetPublicKey(secret); err != nil {
 		return nil, err
 	}
 
@@ -83,26 +84,27 @@ func (config *Config) Sign(event *nostr.Event) error {
 	return event.Sign(config.secret)
 }
 
-func (config *Config) GetSelf() nostr.PubKey {
-	return config.secret.Public()
+func (config *Config) GetSelf() string {
+	pubkey, _ := nostr.GetPublicKey(config.secret)
+	return pubkey
 }
 
-func (config *Config) IsSelf(pubkey nostr.PubKey) bool {
+func (config *Config) IsSelf(pubkey string) bool {
 	return pubkey == config.GetSelf()
 }
 
-func (config *Config) GetOwner() nostr.PubKey {
-	return nostr.MustPubKeyFromHex(config.Info.Pubkey)
+func (config *Config) GetOwner() string {
+	return config.Info.Pubkey
 }
 
-func (config *Config) IsOwner(pubkey nostr.PubKey) bool {
+func (config *Config) IsOwner(pubkey string) bool {
 	return pubkey == config.GetOwner()
 }
 
-func (config *Config) GetAssignedRoles(pubkey nostr.PubKey) []Role {
+func (config *Config) GetAssignedRoles(pubkey string) []Role {
 	roles := make([]Role, 0)
 	for _, role := range config.Roles {
-		if slices.Contains(role.Pubkeys, pubkey.Hex()) {
+		if slices.Contains(role.Pubkeys, pubkey) {
 			roles = append(roles, role)
 		}
 	}
@@ -110,12 +112,12 @@ func (config *Config) GetAssignedRoles(pubkey nostr.PubKey) []Role {
 	return roles
 }
 
-func (config *Config) GetAllRoles(pubkey nostr.PubKey) []Role {
+func (config *Config) GetAllRoles(pubkey string) []Role {
 	roles := make([]Role, 0)
 	for name, role := range config.Roles {
 		if name == "member" {
 			roles = append(roles, role)
-		} else if slices.Contains(role.Pubkeys, pubkey.Hex()) {
+		} else if slices.Contains(role.Pubkeys, pubkey) {
 			roles = append(roles, role)
 		}
 	}
@@ -123,7 +125,7 @@ func (config *Config) GetAllRoles(pubkey nostr.PubKey) []Role {
 	return roles
 }
 
-func (config *Config) CanInvite(pubkey nostr.PubKey) bool {
+func (config *Config) CanInvite(pubkey string) bool {
 	if config.IsOwner(pubkey) || config.IsSelf(pubkey) {
 		return true
 	}
@@ -137,7 +139,7 @@ func (config *Config) CanInvite(pubkey nostr.PubKey) bool {
 	return false
 }
 
-func (config *Config) CanManage(pubkey nostr.PubKey) bool {
+func (config *Config) CanManage(pubkey string) bool {
 	if config.IsOwner(pubkey) || config.IsSelf(pubkey) {
 		return true
 	}

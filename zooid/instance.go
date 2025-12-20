@@ -2,16 +2,15 @@ package zooid
 
 import (
 	"context"
-	"iter"
 	"log"
 	"net/http"
 	"slices"
 	"strings"
 
-	"fiatjaf.com/nostr"
-	"fiatjaf.com/nostr/khatru"
-	"fiatjaf.com/nostr/nip29"
+	"github.com/fiatjaf/khatru"
 	"github.com/gosimple/slug"
+	"github.com/nbd-wtf/go-nostr"
+	"github.com/nbd-wtf/go-nostr/nip29"
 )
 
 type Instance struct {
@@ -73,23 +72,23 @@ func MakeInstance(filename string) (*Instance, error) {
 	instance.Relay.Info.Name = config.Info.Name
 	instance.Relay.Info.Icon = config.Info.Icon
 	// instance.Relay.Info.Self = &self
-	instance.Relay.Info.PubKey = &owner
+	instance.Relay.Info.PubKey = owner
 	instance.Relay.Info.Description = config.Info.Description
 	instance.Relay.Info.Software = "https://github.com/coracle-social/zooid"
 	instance.Relay.Info.Version = "v0.1.0"
 
 	// Handlers
 
-	instance.Relay.OnConnect = instance.OnConnect
-	instance.Relay.PreventBroadcast = instance.PreventBroadcast
-	instance.Relay.StoreEvent = instance.StoreEvent
-	instance.Relay.ReplaceEvent = instance.ReplaceEvent
-	instance.Relay.DeleteEvent = instance.DeleteEvent
-	instance.Relay.OnRequest = instance.OnRequest
-	instance.Relay.QueryStored = instance.QueryStored
-	instance.Relay.OnEvent = instance.OnEvent
-	instance.Relay.OnEventSaved = instance.OnEventSaved
-	instance.Relay.OnEphemeralEvent = instance.OnEphemeralEvent
+	instance.Relay.OnConnect = append(instance.Relay.OnConnect, instance.OnConnect)
+	instance.Relay.PreventBroadcast = append(instance.Relay.PreventBroadcast, instance.PreventBroadcast)
+	instance.Relay.StoreEvent = append(instance.Relay.StoreEvent, instance.StoreEvent)
+	instance.Relay.ReplaceEvent = append(instance.Relay.ReplaceEvent, instance.ReplaceEvent)
+	instance.Relay.DeleteEvent = append(instance.Relay.DeleteEvent, instance.DeleteEvent)
+	instance.Relay.RejectFilter = append(instance.Relay.RejectFilter, instance.OnRequest)
+	instance.Relay.QueryEvents = append(instance.Relay.QueryEvents, instance.QueryStored)
+	instance.Relay.RejectEvent = append(instance.Relay.RejectEvent, instance.OnEvent)
+	instance.Relay.OnEventSaved = append(instance.Relay.OnEventSaved, instance.OnEventSaved)
+	instance.Relay.OnEphemeralEvent = append(instance.Relay.OnEphemeralEvent, instance.OnEphemeralEvent)
 
 	// Todo: when there's a new version of khatru
 	// instance.Relay.StartExpirationManager()
@@ -131,8 +130,8 @@ func MakeInstance(filename string) (*Instance, error) {
 
 	for _, role := range config.Roles {
 		for _, hex := range role.Pubkeys {
-			if pubkey, err := nostr.PubKeyFromHex(hex); err == nil {
-				instance.Management.AllowPubkey(pubkey)
+			if nostr.IsValidPublicKey(hex) {
+				instance.Management.AllowPubkey(hex)
 			}
 		}
 	}
@@ -146,21 +145,28 @@ func (instance *Instance) Cleanup() {
 
 // Utility methods
 
-func (instance *Instance) StripSignature(ctx context.Context, event nostr.Event) nostr.Event {
-	pubkey, _ := khatru.GetAuthed(ctx)
+func (instance *Instance) StripSignature(ctx context.Context, event *nostr.Event) *nostr.Event {
+	if event == nil {
+		return nil
+	}
 
+	pubkey := khatru.GetAuthed(ctx)
 	if instance.Config.Policy.StripSignatures && !instance.Config.CanManage(pubkey) {
-		var zeroSig [64]byte
-		event.Sig = zeroSig
+		stripped := *event
+		stripped.Sig = ""
+		return &stripped
 	}
 
 	return event
 }
 
-func (instance *Instance) AllowRecipientEvent(event nostr.Event) bool {
+func (instance *Instance) AllowRecipientEvent(event *nostr.Event) bool {
+	if event == nil {
+		return false
+	}
 	// For zap receipts and gift wraps, authorize the recipient instead of the author.
 	// For everything else, make sure the authenticated user is the same as the event author
-	recipientAuthKinds := []nostr.Kind{
+	recipientAuthKinds := []int{
 		nostr.KindZap,
 		nostr.KindGiftWrap,
 	}
@@ -168,10 +174,9 @@ func (instance *Instance) AllowRecipientEvent(event nostr.Event) bool {
 	if slices.Contains(recipientAuthKinds, event.Kind) {
 		recipientTag := event.Tags.Find("p")
 
-		if recipientTag != nil {
-			pubkey, err := nostr.PubKeyFromHex(recipientTag[1])
-
-			if err == nil && instance.Management.IsMember(pubkey) {
+		if recipientTag != nil && len(recipientTag) >= 2 {
+			pubkey := recipientTag[1]
+			if nostr.IsValidPublicKey(pubkey) && instance.Management.IsMember(pubkey) {
 				return true
 			}
 		}
@@ -193,7 +198,7 @@ func (instance *Instance) IsInternalEvent(event nostr.Event) bool {
 }
 
 func (instance *Instance) IsReadOnlyEvent(event nostr.Event) bool {
-	readOnlyEventKinds := []nostr.Kind{
+	readOnlyEventKinds := []int{
 		RELAY_ADD_MEMBER,
 		RELAY_REMOVE_MEMBER,
 		RELAY_MEMBERS,
@@ -203,7 +208,7 @@ func (instance *Instance) IsReadOnlyEvent(event nostr.Event) bool {
 }
 
 func (instance *Instance) IsWriteOnlyEvent(event nostr.Event) bool {
-	writeOnlyEventKinds := []nostr.Kind{
+	writeOnlyEventKinds := []int{
 		RELAY_JOIN,
 		RELAY_LEAVE,
 	}
@@ -211,14 +216,17 @@ func (instance *Instance) IsWriteOnlyEvent(event nostr.Event) bool {
 	return slices.Contains(writeOnlyEventKinds, event.Kind)
 }
 
-func (instance *Instance) GenerateInviteEvent(pubkey nostr.PubKey) nostr.Event {
+func (instance *Instance) GenerateInviteEvent(pubkey string) nostr.Event {
 	filter := nostr.Filter{
-		Kinds:   []nostr.Kind{RELAY_INVITE},
-		Authors: []nostr.PubKey{pubkey},
+		Kinds:   []int{RELAY_INVITE},
+		Authors: []string{pubkey},
 	}
 
-	for event := range instance.Events.QueryEvents(filter, 1) {
-		return event
+	ch, err := instance.Events.QueryEvents(context.Background(), filter)
+	if err == nil {
+		if event := <-ch; event != nil {
+			return *event
+		}
 	}
 
 	event := nostr.Event{
@@ -226,7 +234,7 @@ func (instance *Instance) GenerateInviteEvent(pubkey nostr.PubKey) nostr.Event {
 		CreatedAt: nostr.Now(),
 		Tags: nostr.Tags{
 			[]string{"claim", RandomString(8)},
-			[]string{"p", pubkey.Hex()},
+			[]string{"p", pubkey},
 		},
 	}
 
@@ -243,28 +251,30 @@ func (instance *Instance) OnConnect(ctx context.Context) {
 	khatru.RequestAuth(ctx)
 }
 
-func (instance *Instance) PreventBroadcast(ws *khatru.WebSocket, event nostr.Event) bool {
-	return instance.IsWriteOnlyEvent(event)
+func (instance *Instance) PreventBroadcast(ws *khatru.WebSocket, event *nostr.Event) bool {
+	if event == nil {
+		return false
+	}
+	return instance.IsWriteOnlyEvent(*event)
 }
 
-func (instance *Instance) StoreEvent(ctx context.Context, event nostr.Event) error {
-	return instance.Events.StoreEvent(event)
+func (instance *Instance) StoreEvent(ctx context.Context, event *nostr.Event) error {
+	return instance.Events.StoreEvent(ctx, event)
 }
 
-func (instance *Instance) ReplaceEvent(ctx context.Context, event nostr.Event) error {
-	return instance.Events.ReplaceEvent(event)
+func (instance *Instance) ReplaceEvent(ctx context.Context, event *nostr.Event) error {
+	return instance.Events.ReplaceEvent(ctx, event)
 }
 
-func (instance *Instance) DeleteEvent(ctx context.Context, id nostr.ID) error {
-	return instance.Events.DeleteEvent(id)
+func (instance *Instance) DeleteEvent(ctx context.Context, event *nostr.Event) error {
+	return instance.Events.DeleteEvent(ctx, event)
 }
 
 // Requests
 
 func (instance *Instance) OnRequest(ctx context.Context, filter nostr.Filter) (reject bool, msg string) {
-	pubkey, ok := khatru.GetAuthed(ctx)
-
-	if !ok {
+	pubkey := khatru.GetAuthed(ctx)
+	if pubkey == "" {
 		return true, "auth-required: authentication is required for access"
 	}
 
@@ -275,103 +285,148 @@ func (instance *Instance) OnRequest(ctx context.Context, filter nostr.Filter) (r
 	return false, ""
 }
 
-func (instance *Instance) QueryStored(ctx context.Context, filter nostr.Filter) iter.Seq[nostr.Event] {
-	return func(yield func(nostr.Event) bool) {
-		if khatru.IsInternalCall(ctx) {
-			for event := range instance.Events.QueryEvents(filter, 0) {
-				if !yield(event) {
-					return
-				}
+func (instance *Instance) QueryStored(ctx context.Context, filter nostr.Filter) (chan *nostr.Event, error) {
+	if khatru.IsInternalCall(ctx) {
+		return instance.Events.QueryEvents(ctx, filter)
+	}
+
+	pubkey := khatru.GetAuthed(ctx)
+	out := make(chan *nostr.Event)
+
+	go func() {
+		defer close(out)
+
+		send := func(event *nostr.Event) bool {
+			if event == nil {
+				return true
 			}
-		} else {
-			pubkey, _ := khatru.GetAuthed(ctx)
-			generated := make([]nostr.Event, 0)
-
-			if slices.Contains(filter.Kinds, RELAY_INVITE) && instance.Config.CanInvite(pubkey) {
-				generated = append(generated, instance.GenerateInviteEvent(pubkey))
+			select {
+			case out <- event:
+				return true
+			case <-ctx.Done():
+				return false
 			}
+		}
 
-			if slices.Contains(filter.Kinds, nostr.KindSimpleGroupAdmins) {
-				filter = nostr.Filter{
-					Kinds: []nostr.Kind{nostr.KindSimpleGroupMetadata},
-				}
+		generated := make([]*nostr.Event, 0)
 
-				for event := range instance.Events.QueryEvents(filter, 0) {
-					if tag := event.Tags.Find("d"); tag != nil {
-						generated = append(generated, instance.Groups.GenerateAdminsEvent(tag[1]))
-					}
-				}
-			}
+		if slices.Contains(filter.Kinds, RELAY_INVITE) && instance.Config.CanInvite(pubkey) {
+			event := instance.GenerateInviteEvent(pubkey)
+			generated = append(generated, &event)
+		}
 
-			if slices.Contains(filter.Kinds, nostr.KindSimpleGroupMembers) {
-				filter = nostr.Filter{
-					Kinds: []nostr.Kind{nostr.KindSimpleGroupMetadata},
-				}
-
-				for event := range instance.Events.QueryEvents(filter, 0) {
-					if tag := event.Tags.Find("d"); tag != nil {
-						generated = append(generated, instance.Groups.GenerateMembersEvent(tag[1]))
-					}
-				}
+		if slices.Contains(filter.Kinds, nostr.KindSimpleGroupAdmins) {
+			filter = nostr.Filter{
+				Kinds: []int{nostr.KindSimpleGroupMetadata},
 			}
 
-			for _, event := range generated {
-				if !filter.Matches(event) {
-					continue
-				}
-
-				if !yield(instance.StripSignature(ctx, event)) {
-					return
-				}
-			}
-
-			for event := range instance.Events.QueryEvents(filter, 1000) {
-				if event.Kind == RELAY_INVITE {
-					continue
-				}
-
-				if instance.IsInternalEvent(event) {
-					continue
-				}
-
-				if instance.IsWriteOnlyEvent(event) {
-					continue
-				}
-
-				h := GetGroupIDFromEvent(event)
-
-				if h != "" {
-					if !instance.Config.Groups.Enabled {
+			ch, err := instance.Events.QueryEvents(ctx, filter)
+			if err == nil {
+				for event := range ch {
+					if event == nil {
 						continue
 					}
-
-					if !instance.Groups.IsMember(h, pubkey) {
-						continue
+					if tag := event.Tags.Find("d"); tag != nil {
+						gen := instance.Groups.GenerateAdminsEvent(tag[1])
+						generated = append(generated, &gen)
 					}
-				}
-
-				if !instance.Config.Groups.Enabled && slices.Contains(nip29.MetadataEventKinds, event.Kind) {
-					continue
-				}
-
-				if !yield(instance.StripSignature(ctx, event)) {
-					return
 				}
 			}
 		}
-	}
+
+		if slices.Contains(filter.Kinds, nostr.KindSimpleGroupMembers) {
+			filter = nostr.Filter{
+				Kinds: []int{nostr.KindSimpleGroupMetadata},
+			}
+
+			ch, err := instance.Events.QueryEvents(ctx, filter)
+			if err == nil {
+				for event := range ch {
+					if event == nil {
+						continue
+					}
+					if tag := event.Tags.Find("d"); tag != nil {
+						gen := instance.Groups.GenerateMembersEvent(tag[1])
+						generated = append(generated, &gen)
+					}
+				}
+			}
+		}
+
+		for _, event := range generated {
+			if !filter.Matches(event) {
+				continue
+			}
+
+			if !send(instance.StripSignature(ctx, event)) {
+				return
+			}
+		}
+
+		storeFilter := filter
+		if storeFilter.Limit > 0 && storeFilter.Limit > 1000 {
+			storeFilter.Limit = 1000
+		}
+
+		ch, err := instance.Events.QueryEvents(ctx, storeFilter)
+		if err != nil {
+			return
+		}
+		for event := range ch {
+			if event == nil {
+				continue
+			}
+
+			if event.Kind == RELAY_INVITE {
+				continue
+			}
+
+			if instance.IsInternalEvent(*event) {
+				continue
+			}
+
+			if instance.IsWriteOnlyEvent(*event) {
+				continue
+			}
+
+			h := GetGroupIDFromEvent(*event)
+
+			if h != "" {
+				if !instance.Config.Groups.Enabled {
+					continue
+				}
+
+				if !instance.Groups.IsMember(h, pubkey) {
+					continue
+				}
+			}
+
+			if !instance.Config.Groups.Enabled && slices.Contains(nip29.MetadataEventKinds, event.Kind) {
+				continue
+			}
+
+			if !send(instance.StripSignature(ctx, event)) {
+				return
+			}
+		}
+	}()
+
+	return out, nil
 }
 
 // Event publishing
 
-func (instance *Instance) OnEvent(ctx context.Context, event nostr.Event) (reject bool, msg string) {
+func (instance *Instance) OnEvent(ctx context.Context, event *nostr.Event) (reject bool, msg string) {
 	if instance.AllowRecipientEvent(event) {
 		return false, ""
 	}
 
-	pubkey, isAuthenticated := khatru.GetAuthed(ctx)
+	if event == nil {
+		return true, "invalid: missing event"
+	}
 
-	if !isAuthenticated {
+	pubkey := khatru.GetAuthed(ctx)
+	if pubkey == "" {
 		return true, "auth-required: authentication is required for access"
 	} else if pubkey != event.PubKey {
 		return true, "restricted: you cannot publish events on behalf of others"
@@ -385,11 +440,11 @@ func (instance *Instance) OnEvent(ctx context.Context, event nostr.Event) (rejec
 		return true, "restricted: you are not a member of this relay"
 	}
 
-	if instance.IsInternalEvent(event) {
+	if instance.IsInternalEvent(*event) {
 		return true, "invalid: this event's kind is not accepted"
 	}
 
-	if instance.IsReadOnlyEvent(event) {
+	if instance.IsReadOnlyEvent(*event) {
 		return true, "invalid: this event's kind is not accepted"
 	}
 
@@ -407,7 +462,7 @@ func (instance *Instance) OnEvent(ctx context.Context, event nostr.Event) (rejec
 		nostr.KindSimpleGroupLeaveRequest,
 	)
 
-	h := GetGroupIDFromEvent(event)
+	h := GetGroupIDFromEvent(*event)
 
 	if slices.Contains(allGroupKinds, event.Kind) {
 		if !instance.Config.Groups.Enabled {
@@ -454,9 +509,12 @@ func (instance *Instance) OnEvent(ctx context.Context, event nostr.Event) (rejec
 	return false, ""
 }
 
-func (instance *Instance) OnEventSaved(ctx context.Context, event nostr.Event) {
+func (instance *Instance) OnEventSaved(ctx context.Context, event *nostr.Event) {
+	if event == nil {
+		return
+	}
 	if event.Kind == nostr.KindSimpleGroupJoinRequest && instance.Config.Groups.AutoJoin {
-		h := GetGroupIDFromEvent(event)
+		h := GetGroupIDFromEvent(*event)
 		meta := instance.Groups.GetMetadata(h)
 
 		if !HasTag(meta.Tags, "closed") {
@@ -465,19 +523,22 @@ func (instance *Instance) OnEventSaved(ctx context.Context, event nostr.Event) {
 	}
 
 	if event.Kind == nostr.KindSimpleGroupLeaveRequest && instance.Config.Groups.AutoLeave {
-		instance.Groups.RemoveMember(GetGroupIDFromEvent(event), event.PubKey)
+		instance.Groups.RemoveMember(GetGroupIDFromEvent(*event), event.PubKey)
 	}
 
 	if event.Kind == nostr.KindSimpleGroupCreateGroup || event.Kind == nostr.KindSimpleGroupEditMetadata {
-		instance.Groups.SetMetadataFromEvent(event)
+		instance.Groups.SetMetadataFromEvent(*event)
 	}
 
 	if event.Kind == nostr.KindSimpleGroupDeleteGroup {
-		instance.Groups.DeleteGroup(GetGroupIDFromEvent(event))
+		instance.Groups.DeleteGroup(GetGroupIDFromEvent(*event))
 	}
 }
 
-func (instance *Instance) OnEphemeralEvent(ctx context.Context, event nostr.Event) {
+func (instance *Instance) OnEphemeralEvent(ctx context.Context, event *nostr.Event) {
+	if event == nil {
+		return
+	}
 	if event.Kind == RELAY_JOIN {
 		instance.Management.AddMember(event.PubKey)
 	}

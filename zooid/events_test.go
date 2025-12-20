@@ -1,16 +1,17 @@
 package zooid
 
 import (
+	"context"
 	"testing"
 
-	"fiatjaf.com/nostr"
+	"github.com/nbd-wtf/go-nostr"
 )
 
 func createTestEventStore() *EventStore {
 	schema := &Schema{Name: "test_" + RandomString(8)}
 	config := &Config{
 		Host:   "test.com",
-		secret: nostr.Generate(),
+		secret: nostr.GeneratePrivateKey(),
 	}
 	return &EventStore{
 		Config: config,
@@ -18,8 +19,8 @@ func createTestEventStore() *EventStore {
 	}
 }
 
-func createTestEvent(kind nostr.Kind, content string) nostr.Event {
-	secret := nostr.Generate()
+func createTestEvent(kind int, content string) nostr.Event {
+	secret := nostr.GeneratePrivateKey()
 	event := nostr.Event{
 		Kind:      kind,
 		CreatedAt: nostr.Now(),
@@ -45,13 +46,13 @@ func TestEventStore_SaveEvent(t *testing.T) {
 
 	event := createTestEvent(nostr.KindTextNote, "test content")
 
-	err := store.SaveEvent(event)
+	err := store.SaveEvent(context.Background(), &event)
 	if err != nil {
 		t.Errorf("EventStore.SaveEvent() error = %v", err)
 	}
 
 	// Try to save the same event again - should return duplicate error
-	err = store.SaveEvent(event)
+	err = store.SaveEvent(context.Background(), &event)
 	if err == nil {
 		t.Error("EventStore.SaveEvent() should return error for duplicate event")
 	}
@@ -64,13 +65,17 @@ func TestEventStore_QueryEvents_Basic(t *testing.T) {
 	event1 := createTestEvent(nostr.KindTextNote, "first event")
 	event2 := createTestEvent(nostr.KindTextNote, "second event")
 
-	store.SaveEvent(event1)
-	store.SaveEvent(event2)
+	store.SaveEvent(context.Background(), &event1)
+	store.SaveEvent(context.Background(), &event2)
 
 	// Query all events
 	filter := nostr.Filter{}
-	events := make([]nostr.Event, 0)
-	for evt := range store.QueryEvents(filter, 0) {
+	events := make([]*nostr.Event, 0)
+	ch, err := store.QueryEvents(context.Background(), filter)
+	if err != nil {
+		t.Fatalf("QueryEvents() error = %v", err)
+	}
+	for evt := range ch {
 		events = append(events, evt)
 	}
 
@@ -86,13 +91,17 @@ func TestEventStore_QueryEvents_ByKind(t *testing.T) {
 	textEvent := createTestEvent(nostr.KindTextNote, "text note")
 	metadataEvent := createTestEvent(nostr.KindProfileMetadata, "metadata")
 
-	store.SaveEvent(textEvent)
-	store.SaveEvent(metadataEvent)
+	store.SaveEvent(context.Background(), &textEvent)
+	store.SaveEvent(context.Background(), &metadataEvent)
 
 	// Query only text notes
-	filter := nostr.Filter{Kinds: []nostr.Kind{nostr.KindTextNote}}
-	events := make([]nostr.Event, 0)
-	for evt := range store.QueryEvents(filter, 0) {
+	filter := nostr.Filter{Kinds: []int{nostr.KindTextNote}}
+	events := make([]*nostr.Event, 0)
+	ch, err := store.QueryEvents(context.Background(), filter)
+	if err != nil {
+		t.Fatalf("QueryEvents() error = %v", err)
+	}
+	for evt := range ch {
 		events = append(events, evt)
 	}
 
@@ -109,8 +118,9 @@ func TestEventStore_QueryEvents_ByAuthor(t *testing.T) {
 	store := createTestEventStore()
 	store.Init()
 
-	secret1 := nostr.Generate()
-	secret2 := nostr.Generate()
+	secret1 := nostr.GeneratePrivateKey()
+	secret2 := nostr.GeneratePrivateKey()
+	pubkey1, _ := nostr.GetPublicKey(secret1)
 
 	event1 := nostr.Event{Kind: nostr.KindTextNote, CreatedAt: nostr.Now(), Content: "from author 1"}
 	event1.Sign(secret1)
@@ -118,13 +128,17 @@ func TestEventStore_QueryEvents_ByAuthor(t *testing.T) {
 	event2 := nostr.Event{Kind: nostr.KindTextNote, CreatedAt: nostr.Now(), Content: "from author 2"}
 	event2.Sign(secret2)
 
-	store.SaveEvent(event1)
-	store.SaveEvent(event2)
+	store.SaveEvent(context.Background(), &event1)
+	store.SaveEvent(context.Background(), &event2)
 
 	// Query by specific author
-	filter := nostr.Filter{Authors: []nostr.PubKey{secret1.Public()}}
-	events := make([]nostr.Event, 0)
-	for evt := range store.QueryEvents(filter, 0) {
+	filter := nostr.Filter{Authors: []string{pubkey1}}
+	events := make([]*nostr.Event, 0)
+	ch, err := store.QueryEvents(context.Background(), filter)
+	if err != nil {
+		t.Fatalf("QueryEvents() error = %v", err)
+	}
+	for evt := range ch {
 		events = append(events, evt)
 	}
 
@@ -132,7 +146,7 @@ func TestEventStore_QueryEvents_ByAuthor(t *testing.T) {
 		t.Errorf("QueryEvents() by author returned %d events, want 1", len(events))
 	}
 
-	if events[0].PubKey != secret1.Public() {
+	if events[0].PubKey != pubkey1 {
 		t.Error("QueryEvents() by author returned wrong author")
 	}
 }
@@ -144,13 +158,17 @@ func TestEventStore_QueryEvents_ByIDs(t *testing.T) {
 	event1 := createTestEvent(nostr.KindTextNote, "first event")
 	event2 := createTestEvent(nostr.KindTextNote, "second event")
 
-	store.SaveEvent(event1)
-	store.SaveEvent(event2)
+	store.SaveEvent(context.Background(), &event1)
+	store.SaveEvent(context.Background(), &event2)
 
 	// Query by specific ID
-	filter := nostr.Filter{IDs: []nostr.ID{event1.ID}}
-	events := make([]nostr.Event, 0)
-	for evt := range store.QueryEvents(filter, 0) {
+	filter := nostr.Filter{IDs: []string{event1.ID}}
+	events := make([]*nostr.Event, 0)
+	ch, err := store.QueryEvents(context.Background(), filter)
+	if err != nil {
+		t.Fatalf("QueryEvents() error = %v", err)
+	}
+	for evt := range ch {
 		events = append(events, evt)
 	}
 
@@ -173,7 +191,7 @@ func TestEventStore_QueryEvents_ByTags(t *testing.T) {
 		Content:   "tagged event",
 		Tags:      nostr.Tags{{"t", "bitcoin"}, {"p", "testuser"}},
 	}
-	event1.Sign(nostr.Generate())
+	event1.Sign(nostr.GeneratePrivateKey())
 
 	event2 := nostr.Event{
 		Kind:      nostr.KindTextNote,
@@ -181,15 +199,19 @@ func TestEventStore_QueryEvents_ByTags(t *testing.T) {
 		Content:   "other event",
 		Tags:      nostr.Tags{{"t", "nostr"}},
 	}
-	event2.Sign(nostr.Generate())
+	event2.Sign(nostr.GeneratePrivateKey())
 
-	store.SaveEvent(event1)
-	store.SaveEvent(event2)
+	store.SaveEvent(context.Background(), &event1)
+	store.SaveEvent(context.Background(), &event2)
 
 	// Query by tag
 	filter := nostr.Filter{Tags: nostr.TagMap{"t": []string{"bitcoin"}}}
-	events := make([]nostr.Event, 0)
-	for evt := range store.QueryEvents(filter, 0) {
+	events := make([]*nostr.Event, 0)
+	ch, err := store.QueryEvents(context.Background(), filter)
+	if err != nil {
+		t.Fatalf("QueryEvents() error = %v", err)
+	}
+	for evt := range ch {
 		events = append(events, evt)
 	}
 
@@ -208,14 +230,18 @@ func TestEventStore_QueryEvents_ByTags(t *testing.T) {
 		Content:   "event with multi-char tag",
 		Tags:      nostr.Tags{{"title", "special"}, {"t", "ignored"}},
 	}
-	event3.Sign(nostr.Generate())
-	store.SaveEvent(event3)
+	event3.Sign(nostr.GeneratePrivateKey())
+	store.SaveEvent(context.Background(), &event3)
 
 	// Query by multi-character tag key should ignore the tag filter and return all events
 	// (because multi-character tags are skipped in buildSelectQuery)
 	filter = nostr.Filter{Tags: nostr.TagMap{"title": []string{"special"}}}
-	events = make([]nostr.Event, 0)
-	for evt := range store.QueryEvents(filter, 0) {
+	events = make([]*nostr.Event, 0)
+	ch, err = store.QueryEvents(context.Background(), filter)
+	if err != nil {
+		t.Fatalf("QueryEvents() error = %v", err)
+	}
+	for evt := range ch {
 		events = append(events, evt)
 	}
 
@@ -232,18 +258,22 @@ func TestEventStore_QueryEvents_TimeRange(t *testing.T) {
 	newTime := nostr.Timestamp(2000000)
 
 	event1 := nostr.Event{Kind: nostr.KindTextNote, CreatedAt: oldTime, Content: "old event"}
-	event1.Sign(nostr.Generate())
+	event1.Sign(nostr.GeneratePrivateKey())
 
 	event2 := nostr.Event{Kind: nostr.KindTextNote, CreatedAt: newTime, Content: "new event"}
-	event2.Sign(nostr.Generate())
+	event2.Sign(nostr.GeneratePrivateKey())
 
-	store.SaveEvent(event1)
-	store.SaveEvent(event2)
+	store.SaveEvent(context.Background(), &event1)
+	store.SaveEvent(context.Background(), &event2)
 
 	// Query events since a certain time
-	filter := nostr.Filter{Since: oldTime}
-	events := make([]nostr.Event, 0)
-	for evt := range store.QueryEvents(filter, 0) {
+	filter := nostr.Filter{Since: &oldTime}
+	events := make([]*nostr.Event, 0)
+	ch, err := store.QueryEvents(context.Background(), filter)
+	if err != nil {
+		t.Fatalf("QueryEvents() error = %v", err)
+	}
+	for evt := range ch {
 		events = append(events, evt)
 	}
 
@@ -252,9 +282,13 @@ func TestEventStore_QueryEvents_TimeRange(t *testing.T) {
 	}
 
 	// Query events until a certain time
-	filter = nostr.Filter{Until: oldTime}
-	events = make([]nostr.Event, 0)
-	for evt := range store.QueryEvents(filter, 0) {
+	filter = nostr.Filter{Until: &oldTime}
+	events = make([]*nostr.Event, 0)
+	ch, err = store.QueryEvents(context.Background(), filter)
+	if err != nil {
+		t.Fatalf("QueryEvents() error = %v", err)
+	}
+	for evt := range ch {
 		events = append(events, evt)
 	}
 
@@ -270,13 +304,17 @@ func TestEventStore_QueryEvents_Limit(t *testing.T) {
 	// Save multiple events
 	for i := 0; i < 5; i++ {
 		event := createTestEvent(nostr.KindTextNote, "event content")
-		store.SaveEvent(event)
+		store.SaveEvent(context.Background(), &event)
 	}
 
 	// Query with limit
 	filter := nostr.Filter{Limit: 3}
-	events := make([]nostr.Event, 0)
-	for evt := range store.QueryEvents(filter, 0) {
+	events := make([]*nostr.Event, 0)
+	ch, err := store.QueryEvents(context.Background(), filter)
+	if err != nil {
+		t.Fatalf("QueryEvents() error = %v", err)
+	}
+	for evt := range ch {
 		events = append(events, evt)
 	}
 
@@ -290,12 +328,16 @@ func TestEventStore_QueryEvents_LimitZero(t *testing.T) {
 	store.Init()
 
 	event := createTestEvent(nostr.KindTextNote, "test event")
-	store.SaveEvent(event)
+	store.SaveEvent(context.Background(), &event)
 
 	// Query with LimitZero true should return no events
 	filter := nostr.Filter{LimitZero: true}
-	events := make([]nostr.Event, 0)
-	for evt := range store.QueryEvents(filter, 0) {
+	events := make([]*nostr.Event, 0)
+	ch, err := store.QueryEvents(context.Background(), filter)
+	if err != nil {
+		t.Fatalf("QueryEvents() error = %v", err)
+	}
+	for evt := range ch {
 		events = append(events, evt)
 	}
 
@@ -311,13 +353,17 @@ func TestEventStore_QueryEvents_Search(t *testing.T) {
 	event1 := createTestEvent(nostr.KindTextNote, "this contains bitcoin")
 	event2 := createTestEvent(nostr.KindTextNote, "this contains nostr")
 
-	store.SaveEvent(event1)
-	store.SaveEvent(event2)
+	store.SaveEvent(context.Background(), &event1)
+	store.SaveEvent(context.Background(), &event2)
 
 	// Query by search term
 	filter := nostr.Filter{Search: "bitcoin"}
-	events := make([]nostr.Event, 0)
-	for evt := range store.QueryEvents(filter, 0) {
+	events := make([]*nostr.Event, 0)
+	ch, err := store.QueryEvents(context.Background(), filter)
+	if err != nil {
+		t.Fatalf("QueryEvents() error = %v", err)
+	}
+	for evt := range ch {
 		events = append(events, evt)
 	}
 
@@ -346,12 +392,16 @@ func TestEventStore_DeleteEvent(t *testing.T) {
 	store.Init()
 
 	event := createTestEvent(nostr.KindTextNote, "to be deleted")
-	store.SaveEvent(event)
+	store.SaveEvent(context.Background(), &event)
 
 	// Verify event exists
-	filter := nostr.Filter{IDs: []nostr.ID{event.ID}}
-	events := make([]nostr.Event, 0)
-	for evt := range store.QueryEvents(filter, 0) {
+	filter := nostr.Filter{IDs: []string{event.ID}}
+	events := make([]*nostr.Event, 0)
+	ch, err := store.QueryEvents(context.Background(), filter)
+	if err != nil {
+		t.Fatalf("QueryEvents() error = %v", err)
+	}
+	for evt := range ch {
 		events = append(events, evt)
 	}
 
@@ -360,14 +410,18 @@ func TestEventStore_DeleteEvent(t *testing.T) {
 	}
 
 	// Delete the event
-	err := store.DeleteEvent(event.ID)
+	err = store.DeleteEvent(context.Background(), &event)
 	if err != nil {
 		t.Errorf("DeleteEvent() error = %v", err)
 	}
 
 	// Verify event is deleted
-	events = make([]nostr.Event, 0)
-	for evt := range store.QueryEvents(filter, 0) {
+	events = make([]*nostr.Event, 0)
+	ch, err = store.QueryEvents(context.Background(), filter)
+	if err != nil {
+		t.Fatalf("QueryEvents() error = %v", err)
+	}
+	for evt := range ch {
 		events = append(events, evt)
 	}
 
@@ -380,7 +434,8 @@ func TestEventStore_ReplaceEvent(t *testing.T) {
 	store := createTestEventStore()
 	store.Init()
 
-	secret := nostr.Generate()
+	secret := nostr.GeneratePrivateKey()
+	pubkey, _ := nostr.GetPublicKey(secret)
 
 	// Create initial addressable event
 	event1 := nostr.Event{
@@ -391,7 +446,7 @@ func TestEventStore_ReplaceEvent(t *testing.T) {
 	}
 	event1.Sign(secret)
 
-	err := store.ReplaceEvent(event1)
+	err := store.ReplaceEvent(context.Background(), &event1)
 	if err != nil {
 		t.Errorf("ReplaceEvent() error = %v", err)
 	}
@@ -405,15 +460,19 @@ func TestEventStore_ReplaceEvent(t *testing.T) {
 	}
 	event2.Sign(secret)
 
-	err = store.ReplaceEvent(event2)
+	err = store.ReplaceEvent(context.Background(), &event2)
 	if err != nil {
 		t.Errorf("ReplaceEvent() error = %v", err)
 	}
 
 	// Query events - should only have the newer one
-	filter := nostr.Filter{Kinds: []nostr.Kind{nostr.KindProfileMetadata}, Authors: []nostr.PubKey{secret.Public()}}
-	events := make([]nostr.Event, 0)
-	for evt := range store.QueryEvents(filter, 0) {
+	filter := nostr.Filter{Kinds: []int{nostr.KindProfileMetadata}, Authors: []string{pubkey}}
+	events := make([]*nostr.Event, 0)
+	ch, err := store.QueryEvents(context.Background(), filter)
+	if err != nil {
+		t.Fatalf("QueryEvents() error = %v", err)
+	}
+	for evt := range ch {
 		events = append(events, evt)
 	}
 
@@ -430,7 +489,8 @@ func TestEventStore_ReplaceEvent_OlderEvent(t *testing.T) {
 	store := createTestEventStore()
 	store.Init()
 
-	secret := nostr.Generate()
+	secret := nostr.GeneratePrivateKey()
+	pubkey, _ := nostr.GetPublicKey(secret)
 
 	// Create newer event first
 	event1 := nostr.Event{
@@ -441,7 +501,7 @@ func TestEventStore_ReplaceEvent_OlderEvent(t *testing.T) {
 	}
 	event1.Sign(secret)
 
-	store.ReplaceEvent(event1)
+	store.ReplaceEvent(context.Background(), &event1)
 
 	// Try to replace with older event - should be ignored
 	event2 := nostr.Event{
@@ -452,15 +512,19 @@ func TestEventStore_ReplaceEvent_OlderEvent(t *testing.T) {
 	}
 	event2.Sign(secret)
 
-	err := store.ReplaceEvent(event2)
+	err := store.ReplaceEvent(context.Background(), &event2)
 	if err != nil {
 		t.Errorf("ReplaceEvent() with older event error = %v", err)
 	}
 
 	// Verify the newer event is still there
-	filter := nostr.Filter{Kinds: []nostr.Kind{nostr.KindProfileMetadata}, Authors: []nostr.PubKey{secret.Public()}}
-	events := make([]nostr.Event, 0)
-	for evt := range store.QueryEvents(filter, 0) {
+	filter := nostr.Filter{Kinds: []int{nostr.KindProfileMetadata}, Authors: []string{pubkey}}
+	events := make([]*nostr.Event, 0)
+	ch, err := store.QueryEvents(context.Background(), filter)
+	if err != nil {
+		t.Fatalf("QueryEvents() error = %v", err)
+	}
+	for evt := range ch {
 		events = append(events, evt)
 	}
 
@@ -480,16 +544,16 @@ func TestEventStore_CountEvents(t *testing.T) {
 	// Save events with different kinds
 	for i := 0; i < 3; i++ {
 		event := createTestEvent(nostr.KindTextNote, "text note")
-		store.SaveEvent(event)
+		store.SaveEvent(context.Background(), &event)
 	}
 	for i := 0; i < 2; i++ {
 		event := createTestEvent(nostr.KindProfileMetadata, "profile metadata")
-		store.SaveEvent(event)
+		store.SaveEvent(context.Background(), &event)
 	}
 
 	// Count all events
 	filter := nostr.Filter{}
-	count, err := store.CountEvents(filter)
+	count, err := store.CountEvents(context.Background(), filter)
 	if err != nil {
 		t.Errorf("CountEvents() error = %v", err)
 	}
@@ -499,8 +563,8 @@ func TestEventStore_CountEvents(t *testing.T) {
 	}
 
 	// Count by specific kind - should return less than 5
-	filter = nostr.Filter{Kinds: []nostr.Kind{nostr.KindTextNote}}
-	count, err = store.CountEvents(filter)
+	filter = nostr.Filter{Kinds: []int{nostr.KindTextNote}}
+	count, err = store.CountEvents(context.Background(), filter)
 	if err != nil {
 		t.Errorf("CountEvents() by kind error = %v", err)
 	}
@@ -510,8 +574,8 @@ func TestEventStore_CountEvents(t *testing.T) {
 	}
 
 	// Count by another specific kind - should return less than 5
-	filter = nostr.Filter{Kinds: []nostr.Kind{nostr.KindProfileMetadata}}
-	count, err = store.CountEvents(filter)
+	filter = nostr.Filter{Kinds: []int{nostr.KindProfileMetadata}}
+	count, err = store.CountEvents(context.Background(), filter)
 	if err != nil {
 		t.Errorf("CountEvents() by metadata kind error = %v", err)
 	}
