@@ -27,6 +27,7 @@ type Config struct {
 	} `toml:"info"`
 
 	Policy struct {
+		PublicJoin      bool `toml:"public_join"`
 		StripSignatures bool `toml:"strip_signatures"`
 	} `toml:"policy"`
 

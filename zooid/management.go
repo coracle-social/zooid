@@ -289,6 +289,10 @@ func (m *ManagementStore) ValidateJoinRequest(event nostr.Event) (reject bool, e
 		return true, "invalid: you have been banned from this relay"
 	}
 
+	if m.Config.Policy.PublicJoin {
+		return false, ""
+	}
+
 	claimTag := event.Tags.Find("claim")
 
 	if claimTag == nil {

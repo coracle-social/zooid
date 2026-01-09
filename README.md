@@ -36,6 +36,7 @@ Contains information for populating the relay's `nip11` document.
 
 Contains policy and access related configuration.
 
+- `public_join` - whether to allow non-members to join the relay without an invite code. Defaults to `false`.
 - `strip_signatures` - whether to remove signatures when serving events to non-admins. This requires clients/users to trust the relay to properly authenticate signatures. Be cautious about using this; a malicious relay will be able to execute all kinds of attacks, including potentially serving events unrelated to a community use case.
 
 ### `[groups]`
@@ -84,6 +85,7 @@ pubkey = "<hex public key>"
 description = "A community relay for my friends"
 
 [policy]
+public_join = true
 strip_signatures = false
 
 [groups]
