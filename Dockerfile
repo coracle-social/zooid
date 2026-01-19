@@ -13,11 +13,10 @@ RUN CGO_ENABLED=1 GOOS=linux go build -o bin/zooid cmd/relay/main.go
 
 FROM debian:bookworm-slim AS run
 
-# Install ca-certificates for HTTPS and create non-root user
+# Install ca-certificates for HTTPS
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates && \
-    rm -rf /var/lib/apt/lists/* && \
-    useradd -r -u 65534 -g nogroup nonroot
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -28,9 +27,9 @@ COPY docker-entrypoint.sh /docker-entrypoint.sh
 
 RUN chmod +x /docker-entrypoint.sh && \
     mkdir -p /app/config /app/data /app/media && \
-    chown -R nonroot:nogroup /app
+    chown -R nobody:nogroup /app
 
-USER nonroot
+USER nobody
 
 EXPOSE 3334
 
