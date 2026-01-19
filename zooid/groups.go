@@ -271,11 +271,18 @@ func (g *GroupStore) CanRead(pubkey nostr.PubKey, event nostr.Event) bool {
 		return true
 	}
 
+	// For private groups, require membership
 	if HasTag(meta.Tags, "private") && !g.HasAccess(h, pubkey) {
 		return false
 	}
 
-	return true
+	// For public groups with open policy, allow all authenticated users to read
+	if g.Config.Policy.Open && !HasTag(meta.Tags, "private") {
+		return true
+	}
+
+	// Otherwise require group membership
+	return g.HasAccess(h, pubkey)
 }
 
 func (g *GroupStore) CheckWrite(event nostr.Event) string {
@@ -293,6 +300,10 @@ func (g *GroupStore) CheckWrite(event nostr.Event) string {
 	if event.Kind == nostr.KindSimpleGroupCreateGroup {
 		if found {
 			return "invalid: that group already exists"
+		}
+		// If admin_create_only is set, only admins can create groups
+		if g.Config.Groups.AdminCreateOnly && !g.Config.CanManage(event.PubKey) {
+			return "restricted: only admins can create groups"
 		}
 	} else if !found {
 		return "invalid: group not found"

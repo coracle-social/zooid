@@ -27,13 +27,15 @@ type Config struct {
 	} `toml:"info"`
 
 	Policy struct {
+		Open            bool `toml:"open"`             // Allow all authenticated users (no membership required)
 		PublicJoin      bool `toml:"public_join"`
 		StripSignatures bool `toml:"strip_signatures"`
 	} `toml:"policy"`
 
 	Groups struct {
-		Enabled  bool `toml:"enabled"`
-		AutoJoin bool `toml:"auto_join"`
+		Enabled         bool `toml:"enabled"`
+		AutoJoin        bool `toml:"auto_join"`
+		AdminCreateOnly bool `toml:"admin_create_only"` // Only admins can create groups
 	} `toml:"groups"`
 
 	Management struct {

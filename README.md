@@ -1,6 +1,35 @@
-# Zooid
+# Zooid (Unicity Fork)
 
-This is a multi-tenant relay based on [Khatru](https://gitworkshop.dev/fiatjaf.com/nostrlib/tree/master/khatru) which implements a range of access controls. It's designed to be used with [Flotilla](https://flotilla.social) as a community relay (complete with NIP 29 support), but it can also be used outside of a community context.
+This is a fork of [Zooid](https://github.com/coracle-social/zooid), a multi-tenant relay based on [Khatru](https://gitworkshop.dev/fiatjaf.com/nostrlib/tree/master/khatru) which implements a range of access controls. This fork is customized for use with [Unicity Sphere](https://github.com/unicitylabs/sphere) for NIP-29 group chat functionality.
+
+## Unicity Fork Modifications
+
+This fork includes the following changes from upstream Zooid:
+
+### Open Policy for Public Groups
+
+Modified `groups.go` to allow authenticated users to read messages from public groups with open policy, without requiring explicit group membership:
+
+```go
+// In CanRead function - allows public group access
+if g.Config.Policy.Open && !HasTag(meta.Tags, "private") {
+    return true
+}
+```
+
+This enables the "browse and join" workflow where users can discover public groups, view their messages, and then join if interested.
+
+### Configuration for Sphere
+
+The relay is configured with:
+- `public_join = true` — allows anyone to join without invite
+- `groups.enabled = true` — enables NIP-29 support
+- `groups.auto_join = true` — members can join groups without approval
+- Open policy for public group message access
+
+## Original Zooid Documentation
+
+---
 
 ## Architecture
 
@@ -123,4 +152,101 @@ podman run -it \
   -v ./data:/app/data \
   ghcr.io/coracle-social/zooid
 ```
+
+## Running with Unicity Sphere
+
+For local development with Sphere, use Docker Compose:
+
+```bash
+cd /path/to/groupchat  # Contains docker-compose.yml and config/
+docker compose up -d
+```
+
+This starts Zooid on `ws://localhost:3334` with the pre-configured `localhost` relay.
+
+### Default Configuration
+
+The `config/localhost` file provides a development configuration:
+
+```toml
+host = "localhost"
+schema = "localhost"
+secret = "<relay-private-key>"
+
+[info]
+name = "Localhost Relay"
+description = "Local development NIP-29 relay for Sphere"
+
+[policy]
+public_join = true
+
+[groups]
+enabled = true
+auto_join = true
+
+[roles.member]
+can_invite = true
+```
+
+### Verifying the Relay
+
+Check relay status:
+```bash
+curl http://localhost:3334
+```
+
+View logs:
+```bash
+docker compose logs -f zooid
+```
+
+## CI/CD
+
+### GitHub Actions Workflows
+
+This fork includes automated CI/CD:
+
+**Build and Push (`docker-build.yml`):**
+- Triggers on push to main/master or tags
+- Builds Docker image
+- Pushes to GitHub Container Registry (`ghcr.io/unicitylabs/zooid`)
+- Tags: `latest`, `sha-<commit>`, semver tags
+
+**Deploy to AWS (`deploy-aws.yml`):**
+- Triggers after successful build or manual dispatch
+- Forces new ECS deployment
+- Waits for service stability
+
+### Required Secrets
+
+Add these to GitHub repository secrets for AWS deployment:
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+
+### Manual Deployment
+
+```bash
+# Force new deployment
+aws ecs update-service \
+    --cluster sphere-zooid-relay-cluster \
+    --service sphere-zooid-relay-zooid-relay \
+    --force-new-deployment \
+    --region me-central-1
+```
+
+## AWS Infrastructure
+
+See `/Users/pavelg/work/unicity/sphere-infra/aws/` for CloudFormation templates and deployment scripts.
+
+### Environment Variables
+
+When running in AWS ECS, these environment variables configure the relay:
+
+| Variable | Description |
+|----------|-------------|
+| `RELAY_HOST` | Domain name (e.g., `sphere-relay.unicity.network`) |
+| `RELAY_SECRET` | Nostr private key (64-char hex) |
+| `RELAY_NAME` | Display name |
+| `RELAY_DESCRIPTION` | Description |
+| `ADMIN_PUBKEYS` | Admin pubkeys (quoted, comma-separated) |
 

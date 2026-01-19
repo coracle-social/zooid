@@ -266,11 +266,14 @@ func (instance *Instance) DeleteEvent(ctx context.Context, id nostr.ID) error {
 func (instance *Instance) OnRequest(ctx context.Context, filter nostr.Filter) (reject bool, msg string) {
 	pubkey, ok := khatru.GetAuthed(ctx)
 
+	log.Printf("OnRequest: kinds=%v tags=%v authed=%v", filter.Kinds, filter.Tags, ok)
+
 	if !ok {
 		return true, "auth-required: authentication is required for access"
 	}
 
-	if !instance.Management.IsMember(pubkey) {
+	// If open policy, allow all authenticated users; otherwise require membership
+	if !instance.Config.Policy.Open && !instance.Management.IsMember(pubkey) {
 		return true, "restricted: you are not a member of this relay"
 	}
 
@@ -316,8 +319,12 @@ func (instance *Instance) QueryStored(ctx context.Context, filter nostr.Filter) 
 					continue
 				}
 
-				if instance.Groups.IsGroupEvent(event) && !instance.Groups.CanRead(pubkey, event) {
-					continue
+				if instance.Groups.IsGroupEvent(event) {
+					canRead := instance.Groups.CanRead(pubkey, event)
+					if !canRead {
+						log.Printf("QueryStored: filtered out event %s kind=%d (CanRead=false)", event.ID, event.Kind)
+						continue
+					}
 				}
 
 				if !yield(instance.StripSignature(ctx, event)) {
@@ -347,7 +354,8 @@ func (instance *Instance) OnEvent(ctx context.Context, event nostr.Event) (rejec
 		return instance.Management.ValidateJoinRequest(event)
 	}
 
-	if !instance.Management.IsMember(pubkey) {
+	// If open policy, allow all authenticated users; otherwise require membership
+	if !instance.Config.Policy.Open && !instance.Management.IsMember(pubkey) {
 		return true, "restricted: you are not a member of this relay"
 	}
 

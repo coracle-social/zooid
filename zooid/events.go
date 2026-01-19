@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
+	"log"
 
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/eventstore"
@@ -105,6 +106,11 @@ func (events *EventStore) QueryEvents(filter nostr.Filter, maxLimit int) iter.Se
 		if maxLimit > 0 && maxLimit < filter.Limit {
 			filter.Limit = maxLimit
 		}
+
+		// Debug: log filter and SQL
+		log.Printf("QueryEvents filter: kinds=%v tags=%v", filter.Kinds, filter.Tags)
+		sql, args, _ := events.buildSelectQuery(filter).ToSql()
+		log.Printf("QueryEvents SQL: %s args=%v", sql, args)
 
 		rows, err := events.buildSelectQuery(filter).RunWith(GetDb()).Query()
 		if err != nil {
