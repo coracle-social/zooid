@@ -16,6 +16,7 @@ RELAY_NAME="${RELAY_NAME:-Sphere Relay}"
 RELAY_DESCRIPTION="${RELAY_DESCRIPTION:-NIP-29 Group Chat Relay for Unicity Sphere}"
 RELAY_PUBKEY="${RELAY_PUBKEY:-}"
 ADMIN_PUBKEYS="${ADMIN_PUBKEYS:-}"
+GROUPS_ADMIN_CREATE_ONLY="${GROUPS_ADMIN_CREATE_ONLY:-true}"
 
 # Create directories
 mkdir -p "$CONFIG_DIR" "$DATA_DIR" "$MEDIA_DIR"
@@ -56,7 +57,7 @@ strip_signatures = false
 [groups]
 enabled = true
 auto_join = true
-admin_create_only = false
+admin_create_only = $GROUPS_ADMIN_CREATE_ONLY
 EOF
 
     # Add admin role if pubkeys provided
