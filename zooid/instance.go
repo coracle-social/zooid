@@ -124,8 +124,12 @@ func MakeInstance(filename string) (*Instance, error) {
 		instance.Groups.Enable(instance)
 		// Publish relay-level admin list (d tag = "_" for relay admins)
 		// This allows clients to query for relay admins via GROUP_ADMINS with #d: ["_"]
+		admins := instance.Groups.GetAdmins("_")
+		log.Printf("Publishing relay admin list with %d admins: %v", len(admins), admins)
 		if err := instance.Groups.UpdateAdminsList("_"); err != nil {
 			log.Printf("Failed to publish relay admin list: %v", err)
+		} else {
+			log.Printf("Successfully published relay admin list")
 		}
 	}
 

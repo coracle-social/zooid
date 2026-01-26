@@ -253,6 +253,13 @@ func (g *GroupStore) CanRead(pubkey nostr.PubKey, event nostr.Event) bool {
 	}
 
 	h := GetGroupIDFromEvent(event)
+
+	// Relay-level events (h="_") are always readable
+	// This includes the relay admin list (GROUP_ADMINS with d="_")
+	if h == "_" {
+		return true
+	}
+
 	meta, found := g.GetMetadata(h)
 
 	if !found {
@@ -305,6 +312,8 @@ func (g *GroupStore) CheckWrite(event nostr.Event) string {
 		if g.Config.Groups.AdminCreateOnly && !g.Config.CanManage(event.PubKey) {
 			return "restricted: only admins can create groups"
 		}
+		// Group creation check passed, don't apply general ModerationEventKinds check
+		return ""
 	} else if !found {
 		return "invalid: group not found"
 	}
