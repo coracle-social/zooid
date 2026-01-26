@@ -17,7 +17,6 @@ func createTestInstance() *Instance {
 		Info: struct {
 			Name        string `toml:"name"`
 			Icon        string `toml:"icon"`
-			Secret      string `toml:"secret"`
 			Pubkey      string `toml:"pubkey"`
 			Description string `toml:"description"`
 		}{

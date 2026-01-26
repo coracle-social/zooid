@@ -92,7 +92,7 @@ func TestManagementStore_BanEvent(t *testing.T) {
 	bannedItems := mgmt.GetBannedEventItems()
 	itemFound := false
 	for _, item := range bannedItems {
-		if item.ID == eventID.Hex() && item.Reason == reason {
+		if item.ID == eventID && item.Reason == reason {
 			itemFound = true
 			break
 		}

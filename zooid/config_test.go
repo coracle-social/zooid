@@ -14,7 +14,6 @@ func TestConfig_IsOwner(t *testing.T) {
 		Info: struct {
 			Name        string `toml:"name"`
 			Icon        string `toml:"icon"`
-			Secret      string `toml:"secret"`
 			Pubkey      string `toml:"pubkey"`
 			Description string `toml:"description"`
 		}{
@@ -91,7 +90,6 @@ func TestConfig_CanManage(t *testing.T) {
 		Info: struct {
 			Name        string `toml:"name"`
 			Icon        string `toml:"icon"`
-			Secret      string `toml:"secret"`
 			Pubkey      string `toml:"pubkey"`
 			Description string `toml:"description"`
 		}{
@@ -128,7 +126,6 @@ func TestConfig_CanInvite(t *testing.T) {
 		Info: struct {
 			Name        string `toml:"name"`
 			Icon        string `toml:"icon"`
-			Secret      string `toml:"secret"`
 			Pubkey      string `toml:"pubkey"`
 			Description string `toml:"description"`
 		}{
@@ -164,7 +161,6 @@ func TestConfig_MemberRole(t *testing.T) {
 		Info: struct {
 			Name        string `toml:"name"`
 			Icon        string `toml:"icon"`
-			Secret      string `toml:"secret"`
 			Pubkey      string `toml:"pubkey"`
 			Description string `toml:"description"`
 		}{
