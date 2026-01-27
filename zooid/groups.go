@@ -1,10 +1,27 @@
 package zooid
 
 import (
+	"encoding/json"
+
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/nip29"
 	"slices"
 )
+
+// NIP-29 group invite kind
+const KindSimpleGroupCreateInvite nostr.Kind = 9009
+
+// isPrivateGroupContent checks if group creation content contains private:true
+func isPrivateGroupContent(content string) bool {
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(content), &data); err != nil {
+		return false
+	}
+	if private, ok := data["private"].(bool); ok {
+		return private
+	}
+	return false
+}
 
 // Utils
 
@@ -59,6 +76,20 @@ func (g *GroupStore) UpdateMetadata(event nostr.Event) error {
 			tags = append(tags, nostr.Tag{"d", tag[1]})
 		} else {
 			tags = append(tags, tag)
+		}
+	}
+
+	// Parse content JSON and add appropriate visibility tags
+	var contentData map[string]interface{}
+	if err := json.Unmarshal([]byte(event.Content), &contentData); err == nil {
+		if private, ok := contentData["private"].(bool); ok && private {
+			tags = append(tags, nostr.Tag{"private"})
+		}
+		if closed, ok := contentData["closed"].(bool); ok && closed {
+			tags = append(tags, nostr.Tag{"closed"})
+		}
+		if hidden, ok := contentData["hidden"].(bool); ok && hidden {
+			tags = append(tags, nostr.Tag{"hidden"})
 		}
 	}
 
@@ -221,6 +252,40 @@ func (g *GroupStore) UpdateMembersList(h string) error {
 	return g.Events.SignAndStoreEvent(&event, true)
 }
 
+// Invite Codes
+
+// ValidateInviteCode checks if an invite code is valid for a group
+func (g *GroupStore) ValidateInviteCode(h string, code string) bool {
+	if code == "" {
+		return false
+	}
+
+	filter := nostr.Filter{
+		Kinds: []nostr.Kind{KindSimpleGroupCreateInvite},
+		Tags: nostr.TagMap{
+			"h": []string{h},
+		},
+	}
+
+	for event := range g.Events.QueryEvents(filter, 0) {
+		codeTag := event.Tags.Find("code")
+		if codeTag != nil && len(codeTag) >= 2 && codeTag[1] == code {
+			return true
+		}
+	}
+
+	return false
+}
+
+// GetInviteCodeFromEvent extracts the invite code from an event's tags
+func GetInviteCodeFromEvent(event nostr.Event) string {
+	tag := event.Tags.Find("code")
+	if tag != nil && len(tag) >= 2 {
+		return tag[1]
+	}
+	return ""
+}
+
 // Other stuff
 
 func (g *GroupStore) HasAccess(h string, pubkey nostr.PubKey) bool {
@@ -313,6 +378,12 @@ func (g *GroupStore) CheckWrite(event nostr.Event) string {
 		if g.Config.Groups.AdminCreateOnly && !g.Config.CanManage(event.PubKey) {
 			return "restricted: only admins can create groups"
 		}
+		// If private_admin_only is set, check if group is private
+		if g.Config.Groups.PrivateAdminOnly && !g.Config.CanManage(event.PubKey) {
+			if isPrivateGroupContent(event.Content) {
+				return "restricted: only admins can create private groups"
+			}
+		}
 		// Group creation check passed, don't apply general ModerationEventKinds check
 		return ""
 	} else if !found {
@@ -323,16 +394,33 @@ func (g *GroupStore) CheckWrite(event nostr.Event) string {
 		return "restricted: you are not authorized to manage groups"
 	}
 
-	if HasTag(meta.Tags, "hidden") && !g.HasAccess(h, event.PubKey) {
-		return "invalid: group not found"
-	}
-
+	// Handle join requests - check invite code for private/hidden groups
 	if event.Kind == nostr.KindSimpleGroupJoinRequest {
 		if g.IsMember(h, event.PubKey) {
 			return "duplicate: already a member"
-		} else {
-			return ""
 		}
+
+		isPrivate := HasTag(meta.Tags, "private")
+		isHidden := HasTag(meta.Tags, "hidden")
+
+		// For private or hidden groups, require a valid invite code
+		if isPrivate || isHidden {
+			inviteCode := GetInviteCodeFromEvent(event)
+			if !g.ValidateInviteCode(h, inviteCode) {
+				if isHidden {
+					// Don't reveal that the group exists
+					return "invalid: group not found"
+				}
+				return "restricted: valid invite code required to join this group"
+			}
+		}
+
+		return ""
+	}
+
+	// For non-join requests, hidden groups require access
+	if HasTag(meta.Tags, "hidden") && !g.HasAccess(h, event.PubKey) {
+		return "invalid: group not found"
 	}
 
 	if event.Kind == nostr.KindSimpleGroupLeaveRequest {
