@@ -20,6 +20,7 @@ import (
 const (
 	KindGroupAdmins      = 39001
 	KindGroupMetadata    = 39000
+	KindGroupMembers     = 39002
 	KindCreateGroup      = 9007
 	KindDeleteGroup      = 9008
 	KindJoinRequest      = 9021
@@ -407,7 +408,37 @@ func TestIntegration_AdminCanCreateGroup(t *testing.T) {
 		}
 	}
 
-	t.Logf("Group created successfully with correct metadata")
+	// Verify the creator is added as a member
+	membersFilter := map[string]interface{}{
+		"kinds": []int{KindGroupMembers},
+		"#d":    []string{"testgroup"},
+	}
+
+	memberEvents := client.subscribe(ctx, t, "group-members", membersFilter)
+	if len(memberEvents) == 0 {
+		t.Fatal("Group members list not found after creation")
+	}
+
+	memberEvent := memberEvents[0]
+	pTagCount := 0
+	creatorFound := false
+	for _, tag := range memberEvent.Tags {
+		if len(tag) >= 2 && tag[0] == "p" {
+			pTagCount++
+			if tag[1] == adminPubkey.Hex() {
+				creatorFound = true
+			}
+		}
+	}
+
+	if pTagCount == 0 {
+		t.Error("Group members list should have at least 1 member (the creator)")
+	}
+	if !creatorFound {
+		t.Error("Group creator should be in the members list")
+	}
+
+	t.Logf("Group created successfully with correct metadata and %d member(s)", pTagCount)
 }
 
 func TestIntegration_NonAdminCannotCreateGroup(t *testing.T) {

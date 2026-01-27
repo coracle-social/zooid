@@ -412,6 +412,8 @@ func (instance *Instance) OnEventSaved(ctx context.Context, event nostr.Event) {
 
 	if event.Kind == nostr.KindSimpleGroupCreateGroup {
 		instance.Groups.UpdateMetadata(event)
+		instance.Groups.AddMember(h, event.PubKey) // Add creator as member
+		instance.Groups.UpdateMembersList(h)
 		instance.Groups.UpdateAdminsList(h)
 	}
 
