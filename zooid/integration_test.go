@@ -7,7 +7,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
+	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -16,6 +19,37 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
+
+// Pre-built image name and sync.Once for building it exactly once
+var (
+	prebuiltImage   = "zooid-integration-test:latest"
+	buildImageOnce  sync.Once
+	buildImageError error
+)
+
+// buildImage builds the Docker image once and caches the result
+func buildImage(t *testing.T) string {
+	buildImageOnce.Do(func() {
+		log.Println("Building Docker image for integration tests (this happens once)...")
+
+		// Build using docker CLI with a fixed tag
+		// Tests run from zooid/zooid/, Dockerfile is in zooid/
+		cmd := exec.Command("docker", "build", "-t", prebuiltImage, "-f", "Dockerfile", ".")
+		cmd.Dir = ".."
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			buildImageError = fmt.Errorf("failed to build Docker image: %w\nOutput: %s", err, string(output))
+			return
+		}
+
+		log.Printf("Built Docker image: %s", prebuiltImage)
+	})
+
+	if buildImageError != nil {
+		t.Fatalf("Failed to build Docker image: %v", buildImageError)
+	}
+	return prebuiltImage
+}
 
 const (
 	KindGroupAdmins      = 39001
@@ -57,6 +91,8 @@ func setupRelay(ctx context.Context, t *testing.T, adminCreateOnly bool) *relayC
 }
 
 func setupRelayWithConfig(ctx context.Context, t *testing.T, cfg relayConfig) *relayContainer {
+	image := buildImage(t)
+
 	adminCreateOnlyStr := "false"
 	if cfg.adminCreateOnly {
 		adminCreateOnlyStr = "true"
@@ -67,10 +103,7 @@ func setupRelayWithConfig(ctx context.Context, t *testing.T, cfg relayConfig) *r
 	}
 
 	req := testcontainers.ContainerRequest{
-		FromDockerfile: testcontainers.FromDockerfile{
-			Context:    "..",
-			Dockerfile: "Dockerfile",
-		},
+		Image:        image,
 		ExposedPorts: []string{"3334/tcp"},
 		Env: map[string]string{
 			"RELAY_HOST":                "localhost",
