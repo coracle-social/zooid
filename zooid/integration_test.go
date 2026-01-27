@@ -384,7 +384,30 @@ func TestIntegration_AdminCanCreateGroup(t *testing.T) {
 		t.Fatal("Group metadata not found after creation")
 	}
 
-	t.Logf("Group created successfully")
+	// Verify the metadata contains the group name
+	metaEvent := events[0]
+	t.Logf("Group metadata content: %s", metaEvent.Content)
+
+	if metaEvent.Content == "" {
+		t.Error("Group metadata content should not be empty")
+	}
+
+	// Parse content to verify name is included
+	var metadata map[string]interface{}
+	if err := json.Unmarshal([]byte(metaEvent.Content), &metadata); err != nil {
+		t.Errorf("Failed to parse metadata content as JSON: %v", err)
+	} else {
+		name, ok := metadata["name"].(string)
+		if !ok || name != "Test Group" {
+			t.Errorf("Expected group name 'Test Group', got '%v'", metadata["name"])
+		}
+		about, ok := metadata["about"].(string)
+		if !ok || about != "Integration test group" {
+			t.Errorf("Expected about 'Integration test group', got '%v'", metadata["about"])
+		}
+	}
+
+	t.Logf("Group created successfully with correct metadata")
 }
 
 func TestIntegration_NonAdminCannotCreateGroup(t *testing.T) {

@@ -66,6 +66,7 @@ func (g *GroupStore) UpdateMetadata(event nostr.Event) error {
 		Kind:      nostr.KindSimpleGroupMetadata,
 		CreatedAt: event.CreatedAt,
 		Tags:      tags,
+		Content:   event.Content, // Include metadata JSON (name, about, picture, etc.)
 	}
 
 	return g.Events.SignAndStoreEvent(&metadataEvent, true)
