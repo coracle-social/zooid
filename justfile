@@ -7,5 +7,8 @@ build:
 test:
   go test -v ./...
 
+test-bdd:
+  go test -v ./zooid -run TestFeatures
+
 fmt:
   gofmt -w -s .

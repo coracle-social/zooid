@@ -15,7 +15,7 @@ var (
 type KeyValueStore struct{}
 
 func GetKeyValueStore() *KeyValueStore {
-	dbOnce.Do(func() {
+	kvOnce.Do(func() {
 		kv = &KeyValueStore{}
 		kv.Migrate()
 	})

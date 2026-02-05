@@ -140,6 +140,34 @@ can_manage = true
 
 See `justfile` for defined commands.
 
+### Running Tests
+
+**Unit tests:**
+```bash
+just test
+# or directly:
+go test -v ./...
+```
+
+**BDD tests (Cucumber/Gherkin scenarios):**
+```bash
+just test-bdd
+# or directly:
+go test -v ./zooid -run TestFeatures
+```
+
+The BDD tests use [godog](https://github.com/cucumber/godog) and cover:
+- Event storage and querying
+- Group lifecycle, membership, and access control
+- Role-based permissions
+- Blossom media handling
+- Key-value store operations
+- Multi-instance dispatch
+- NIP-86 management API
+- Special events (zaps, gift wraps)
+
+Feature files are located in `zooid/features/`.
+
 ## Deploying
 
 Zooid can be run using an OCI container:
