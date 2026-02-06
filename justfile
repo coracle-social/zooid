@@ -7,7 +7,10 @@ build-relay:
 build-import:
   CGO_ENABLED=1 go build -o bin/import cmd/import/main.go
 
-build: build-relay build-import
+build-export:
+  CGO_ENABLED=1 go build -o bin/export cmd/export/main.go
+
+build: build-relay build-import build-export
 
 test:
   go test -v ./...

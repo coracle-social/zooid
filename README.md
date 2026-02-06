@@ -111,6 +111,7 @@ can_manage = true
 
 After running `just build`, a number of scripts will be available:
 
+- `./bin/export` prints JSONL events to stdout for a given virtual relay
 - `./bin/import` takes JSONL events on stdin and imports it into the given virtual relay
 
 ## Development
