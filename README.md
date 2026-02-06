@@ -107,6 +107,12 @@ pubkeys = ["d9254d9898fd4728f7e2b32b87520221a50f6b8b97d935d7da2de8923988aa6d"]
 can_manage = true
 ```
 
+## Scripts
+
+After running `just build`, a number of scripts will be available:
+
+- `./bin/import` takes JSONL events on stdin and imports it into the given virtual relay
+
 ## Development
 
 See `justfile` for defined commands.
