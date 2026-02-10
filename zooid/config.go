@@ -36,6 +36,10 @@ type Config struct {
 		AutoJoin bool `toml:"auto_join"`
 	} `toml:"groups"`
 
+	Push struct {
+		Enabled bool `toml:"enabled"`
+	} `toml:"push"`
+
 	Management struct {
 		Enabled bool     `toml:"enabled"`
 		Methods []string `toml:"methods"`

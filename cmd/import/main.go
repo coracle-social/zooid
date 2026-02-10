@@ -28,8 +28,8 @@ func main() {
 
 	var (
 		relay = flag.String("relay", "", "Relay name (required)")
-		reset  = flag.Bool("reset", false, "Delete all events from the store before importing")
-		force  = flag.Bool("force", false, "Skip validation prompts and import valid events only")
+		reset = flag.Bool("reset", false, "Delete all events from the store before importing")
+		force = flag.Bool("force", false, "Skip validation prompts and import valid events only")
 	)
 	flag.Parse()
 

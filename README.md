@@ -59,6 +59,12 @@ Configures blossom support.
 
 - `enabled` - whether blossom is enabled.
 
+### `[push]`
+
+Configures NIP 9a push support.
+
+- `enabled` - whether push is enabled.
+
 ### `[roles]`
 
 Defines roles that can be assigned to different users and attendant privileges. Each role is defined by a `[roles.{role_name}]` header and has the following options:
@@ -97,6 +103,9 @@ enabled = true
 methods = ["supportedmethods", "banpubkey", "allowpubkey"]
 
 [blossom]
+enabled = false
+
+[push]
 enabled = false
 
 [roles.member]
