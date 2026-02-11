@@ -332,5 +332,5 @@ func (g *GroupStore) CheckWrite(event nostr.Event) string {
 // Middleware
 
 func (g *GroupStore) Enable(instance *Instance) {
-	instance.Relay.Info.SupportedNIPs = append(instance.Relay.Info.SupportedNIPs, 29)
+	instance.Relay.Info.SupportedNIPs = append(instance.Relay.Info.SupportedNIPs, "29")
 }

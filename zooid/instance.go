@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"slices"
-	"strings"
 
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/khatru"
@@ -20,6 +19,7 @@ type Instance struct {
 	Blossom    *BlossomStore
 	Management *ManagementStore
 	Groups     *GroupStore
+	Push       *PushManager
 }
 
 func MakeInstance(filename string) (*Instance, error) {
@@ -54,6 +54,13 @@ func MakeInstance(filename string) (*Instance, error) {
 		Management: management,
 	}
 
+	push := &PushManager{
+		Config:     config,
+		Events:     events,
+		Management: management,
+		Groups:     groups,
+	}
+
 	instance := &Instance{
 		Relay:      relay,
 		Config:     config,
@@ -61,22 +68,23 @@ func MakeInstance(filename string) (*Instance, error) {
 		Blossom:    blossom,
 		Management: management,
 		Groups:     groups,
+		Push:       push,
 	}
 
 	// NIP 11 info
 
-	// self := config.GetSelf()
+	self := config.GetSelf()
 	owner := config.GetOwner()
 
 	instance.Relay.Negentropy = true
 	instance.Relay.Info.Name = config.Info.Name
 	instance.Relay.Info.Icon = config.Info.Icon
-	// instance.Relay.Info.Self = &self
+	instance.Relay.Info.Self = &self
 	instance.Relay.Info.PubKey = &owner
 	instance.Relay.Info.Description = config.Info.Description
 	instance.Relay.Info.Software = "https://github.com/coracle-social/zooid"
 	instance.Relay.Info.Version = "v0.1.0"
-	instance.Relay.Info.SupportedNIPs = append(instance.Relay.Info.SupportedNIPs, 43)
+	instance.Relay.Info.SupportedNIPs = append(instance.Relay.Info.SupportedNIPs, "43")
 
 	// Handlers
 
@@ -91,8 +99,9 @@ func MakeInstance(filename string) (*Instance, error) {
 	instance.Relay.OnEventSaved = instance.OnEventSaved
 	instance.Relay.OnEphemeralEvent = instance.OnEphemeralEvent
 
-	// Todo: when there's a new version of khatru
-	// instance.Relay.StartExpirationManager()
+	// Expiration
+
+	instance.Relay.StartExpirationManager(instance.Relay.QueryStored, instance.Relay.DeleteEvent)
 
 	// HTTP request handling
 
@@ -124,6 +133,10 @@ func MakeInstance(filename string) (*Instance, error) {
 		instance.Groups.Enable(instance)
 	}
 
+	if config.Push.Enabled {
+		instance.Push.Enable(instance)
+	}
+
 	// Update managed membership/admin lists
 
 	instance.Management.AllowPubkey(config.GetSelf())
@@ -141,14 +154,13 @@ func MakeInstance(filename string) (*Instance, error) {
 }
 
 func (instance *Instance) Cleanup() {
+	instance.Relay.DisableExpirationManager()
 	instance.Events.Close()
 }
 
 // Utility methods
 
-func (instance *Instance) StripSignature(ctx context.Context, event nostr.Event) nostr.Event {
-	pubkey, _ := khatru.GetAuthed(ctx)
-
+func (instance *Instance) StripSignature(pubkey nostr.PubKey, event nostr.Event) nostr.Event {
 	if instance.Config.Policy.StripSignatures && !instance.Config.CanManage(pubkey) {
 		var zeroSig [64]byte
 		event.Sig = zeroSig
@@ -178,37 +190,6 @@ func (instance *Instance) AllowRecipientEvent(event nostr.Event) bool {
 	}
 
 	return false
-}
-
-func (instance *Instance) IsInternalEvent(event nostr.Event) bool {
-	if event.Kind == nostr.KindApplicationSpecificData {
-		tag := event.Tags.Find("d")
-
-		if tag != nil && strings.HasPrefix(tag[1], "zooid/") {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (instance *Instance) IsReadOnlyEvent(event nostr.Event) bool {
-	readOnlyEventKinds := []nostr.Kind{
-		RELAY_ADD_MEMBER,
-		RELAY_REMOVE_MEMBER,
-		RELAY_MEMBERS,
-	}
-
-	return slices.Contains(readOnlyEventKinds, event.Kind)
-}
-
-func (instance *Instance) IsWriteOnlyEvent(event nostr.Event) bool {
-	writeOnlyEventKinds := []nostr.Kind{
-		RELAY_JOIN,
-		RELAY_LEAVE,
-	}
-
-	return slices.Contains(writeOnlyEventKinds, event.Kind)
 }
 
 func (instance *Instance) GenerateInviteEvent(pubkey nostr.PubKey) nostr.Event {
@@ -246,7 +227,7 @@ func (instance *Instance) OnConnect(ctx context.Context) {
 }
 
 func (instance *Instance) PreventBroadcast(ws *khatru.WebSocket, filter nostr.Filter, event nostr.Event) bool {
-	return instance.IsWriteOnlyEvent(event)
+	return IsWriteOnlyEvent(event)
 }
 
 func (instance *Instance) StoreEvent(ctx context.Context, event nostr.Event) error {
@@ -298,21 +279,17 @@ func (instance *Instance) QueryStored(ctx context.Context, filter nostr.Filter) 
 					continue
 				}
 
-				if !yield(instance.StripSignature(ctx, event)) {
+				if !yield(instance.StripSignature(pubkey, event)) {
 					return
 				}
 			}
 
 			for event := range instance.Events.QueryEvents(filter, 1000) {
-				if event.Kind == RELAY_INVITE {
+				if !IsReadableEvent(event) {
 					continue
 				}
 
-				if instance.IsInternalEvent(event) {
-					continue
-				}
-
-				if instance.IsWriteOnlyEvent(event) {
+				if event.Kind == PUSH_SUBSCRIPTION && event.PubKey != pubkey {
 					continue
 				}
 
@@ -320,7 +297,7 @@ func (instance *Instance) QueryStored(ctx context.Context, filter nostr.Filter) 
 					continue
 				}
 
-				if !yield(instance.StripSignature(ctx, event)) {
+				if !yield(instance.StripSignature(pubkey, event)) {
 					return
 				}
 			}
@@ -347,15 +324,19 @@ func (instance *Instance) OnEvent(ctx context.Context, event nostr.Event) (rejec
 		return instance.Management.ValidateJoinRequest(event)
 	}
 
+	if event.Kind == PUSH_SUBSCRIPTION {
+		return instance.Push.ValidatePushSubscription(event)
+	}
+
 	if !instance.Management.IsMember(pubkey) {
 		return true, "restricted: you are not a member of this relay"
 	}
 
-	if instance.IsInternalEvent(event) {
+	if IsInternalEvent(event) {
 		return true, "invalid: this event's kind is not accepted"
 	}
 
-	if instance.IsReadOnlyEvent(event) {
+	if IsReadOnlyEvent(event) {
 		return true, "invalid: this event's kind is not accepted"
 	}
 
@@ -406,6 +387,10 @@ func (instance *Instance) OnEventSaved(ctx context.Context, event nostr.Event) {
 	if event.Kind == nostr.KindSimpleGroupDeleteGroup {
 		instance.Groups.DeleteGroup(h)
 	}
+
+	if instance.Config.Push.Enabled && !IsWriteOnlyEvent(event) {
+		instance.Push.HandleEvent(event)
+	}
 }
 
 func (instance *Instance) OnEphemeralEvent(ctx context.Context, event nostr.Event) {
@@ -415,5 +400,9 @@ func (instance *Instance) OnEphemeralEvent(ctx context.Context, event nostr.Even
 
 	if event.Kind == RELAY_LEAVE {
 		instance.Management.RemoveMember(event.PubKey)
+	}
+
+	if instance.Config.Push.Enabled && !IsWriteOnlyEvent(event) {
+		instance.Push.HandleEvent(event)
 	}
 }

@@ -14,9 +14,58 @@ const (
 	RELAY_JOIN          = 28934
 	RELAY_INVITE        = 28935
 	RELAY_LEAVE         = 28936
+	PUSH_SUBSCRIPTION   = 30390
 	BANNED_PUBKEYS      = "zooid/banned_pubkeys"
 	BANNED_EVENTS       = "zooid/banned_events"
 )
+
+func IsInternalEvent(event nostr.Event) bool {
+	if event.Kind == nostr.KindApplicationSpecificData {
+		tag := event.Tags.Find("d")
+
+		if tag != nil && strings.HasPrefix(tag[1], "zooid/") {
+			return true
+		}
+	}
+
+	return false
+}
+
+func IsReadOnlyEvent(event nostr.Event) bool {
+	readOnlyEventKinds := []nostr.Kind{
+		RELAY_ADD_MEMBER,
+		RELAY_REMOVE_MEMBER,
+		RELAY_MEMBERS,
+	}
+
+	return slices.Contains(readOnlyEventKinds, event.Kind)
+}
+
+func IsWriteOnlyEvent(event nostr.Event) bool {
+	writeOnlyEventKinds := []nostr.Kind{
+		RELAY_JOIN,
+		RELAY_LEAVE,
+		PUSH_SUBSCRIPTION,
+	}
+
+	return slices.Contains(writeOnlyEventKinds, event.Kind)
+}
+
+func IsReadableEvent(event nostr.Event) bool {
+	if event.Kind == RELAY_INVITE {
+		return false
+	}
+
+	if IsInternalEvent(event) {
+		return false
+	}
+
+	if IsWriteOnlyEvent(event) {
+		return false
+	}
+
+	return true
+}
 
 func First[T any](s []T) T {
 	if len(s) == 0 {

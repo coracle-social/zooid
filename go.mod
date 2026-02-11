@@ -1,6 +1,6 @@
 module zooid
 
-go 1.24.1
+go 1.25
 
 require (
 	fiatjaf.com/nostr v0.0.0-20251104112613-38a6ca92b954
@@ -35,6 +35,8 @@ require (
 	github.com/puzpuzpuz/xsync/v3 v3.5.1 // indirect
 	github.com/rs/cors v1.11.1 // indirect
 	github.com/savsgio/gotils v0.0.0-20240704082632-aef3928b8a38 // indirect
+	github.com/templexxx/cpu v0.0.1 // indirect
+	github.com/templexxx/xhex v0.0.0-20200614015412-aed53437177b // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
@@ -42,6 +44,9 @@ require (
 	github.com/valyala/fasthttp v1.59.0 // indirect
 	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394 // indirect
 	golang.org/x/net v0.41.0 // indirect
+	golang.org/x/sync v0.16.0 // indirect
 	golang.org/x/sys v0.35.0 // indirect
 	golang.org/x/text v0.28.0 // indirect
 )
+
+replace fiatjaf.com/nostr => git.coracle.social/Coracle/nostrlib v0.0.0-20260209224037-43de47addbce
