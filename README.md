@@ -14,6 +14,8 @@ Zooid supports a few environment variables, which configure shared resources lik
 - `CONFIG` - where to store relay configuration files. Defaults to `./config`.
 - `MEDIA` - where to store blossom media files. Defaults to `./media`.
 - `DATA` - where to store databse files. Defaults to `./data`.
+- `API_HOST` - the hostname on which to expose the management API. If not set, the API is disabled.
+- `API_WHITELIST` - a comma-separated list of nostr hex pubkeys authorized to use the management API. Required when `API_HOST` is set.
 
 ## Configuration
 
@@ -115,6 +117,17 @@ can_invite = true
 pubkeys = ["d9254d9898fd4728f7e2b32b87520221a50f6b8b97d935d7da2de8923988aa6d"]
 can_manage = true
 ```
+
+## API
+
+When `API_HOST` and `API_WHITELIST` are configured, a JSON REST API is available for managing virtual relays remotely. All API requests must be authenticated using [NIP 98](https://github.com/nostr-protocol/nips/blob/master/98.md) HTTP AUTH.
+
+The API accepts JSON config objects and stores them as TOML files in the `CONFIG` directory. Configs are validated for required fields (`host`, `schema`, `secret`) and duplicate checking (`schema` and `host` must be unique across all relays).
+
+Endpoints:
+- `POST /relay/{id}` - Creates a new virtual relay config. Returns 201 on success, 409 if the id/schema/host already exists, 400 for invalid config.
+- `PUT /relay/{id}` - Updates an existing virtual relay config. Returns 200 on success, 404 if the id doesn't exist, 409 if the new schema/host conflicts with another relay.
+- `DELETE /relay/{id}` - Deletes a virtual relay config. Returns 200 on success, 404 if the id doesn't exist.
 
 ## Scripts
 
