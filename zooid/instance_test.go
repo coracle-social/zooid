@@ -17,7 +17,6 @@ func createTestInstance() *Instance {
 		Info: struct {
 			Name        string `toml:"name"`
 			Icon        string `toml:"icon"`
-			Secret      string `toml:"secret"`
 			Pubkey      string `toml:"pubkey"`
 			Description string `toml:"description"`
 		}{
@@ -156,8 +155,6 @@ func TestInstance_GenerateInviteEvent(t *testing.T) {
 }
 
 func TestInstance_IsInternalEvent(t *testing.T) {
-	instance := createTestInstance()
-
 	tests := []struct {
 		name  string
 		event nostr.Event
@@ -207,7 +204,7 @@ func TestInstance_IsInternalEvent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := instance.IsInternalEvent(tt.event)
+			result := IsInternalEvent(tt.event)
 			if result != tt.want {
 				t.Errorf("IsInternalEvent() = %v, want %v", result, tt.want)
 			}
