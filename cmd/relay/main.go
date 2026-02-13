@@ -19,18 +19,39 @@ func main() {
 	signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
 
 	port := zooid.Env("PORT")
+	apiHost := zooid.Env("API_HOST")
+	apiWhitelist := zooid.Env("API_WHITELIST")
+	configDir := zooid.Env("CONFIG")
+
+	// Create the main handler
+	mainHandler := http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			instance, exists := zooid.Dispatch(r.Host)
+			if exists {
+				instance.Relay.ServeHTTP(w, r)
+			} else {
+				http.Error(w, "Not Found", http.StatusNotFound)
+			}
+		},
+	)
+
+	// Wrap with API handler if API_HOST is configured
+	var handler http.Handler = mainHandler
+	if apiHost != "" && apiWhitelist != "" {
+		apiHandler := zooid.NewAPIHandler(apiWhitelist, configDir)
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Check if this request is for the API host
+			if r.Host == apiHost {
+				apiHandler.ServeHTTP(w, r)
+			} else {
+				mainHandler.ServeHTTP(w, r)
+			}
+		})
+	}
+
 	srv := &http.Server{
-		Addr: fmt.Sprintf(":%s", port),
-		Handler: http.HandlerFunc(
-			func(w http.ResponseWriter, r *http.Request) {
-				instance, exists := zooid.Dispatch(r.Host)
-				if exists {
-					instance.Relay.ServeHTTP(w, r)
-				} else {
-					http.Error(w, "Not Found", http.StatusNotFound)
-				}
-			},
-		),
+		Addr:    fmt.Sprintf(":%s", port),
+		Handler: handler,
 	}
 
 	go func() {
