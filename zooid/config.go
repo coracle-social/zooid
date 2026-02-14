@@ -10,46 +10,46 @@ import (
 )
 
 type Role struct {
-	Pubkeys   []string `toml:"pubkeys"`
-	CanInvite bool     `toml:"can_invite"`
-	CanManage bool     `toml:"can_manage"`
+	Pubkeys   []string `toml:"pubkeys" json:"pubkeys"`
+	CanInvite bool     `toml:"can_invite" json:"can_invite"`
+	CanManage bool     `toml:"can_manage" json:"can_manage"`
 }
 
 type Config struct {
-	Host   string `toml:"host"`
-	Schema string `toml:"schema"`
-	Secret string `toml:"secret"`
+	Host   string `toml:"host" json:"host"`
+	Schema string `toml:"schema" json:"schema"`
+	Secret string `toml:"secret" json:"secret"`
 	Info   struct {
-		Name        string `toml:"name"`
-		Icon        string `toml:"icon"`
-		Pubkey      string `toml:"pubkey"`
-		Description string `toml:"description"`
-	} `toml:"info"`
+		Name        string `toml:"name" json:"name"`
+		Icon        string `toml:"icon" json:"icon"`
+		Pubkey      string `toml:"pubkey" json:"pubkey"`
+		Description string `toml:"description" json:"description"`
+	} `toml:"info" json:"info"`
 
 	Policy struct {
-		PublicJoin      bool `toml:"public_join"`
-		StripSignatures bool `toml:"strip_signatures"`
-	} `toml:"policy"`
+		PublicJoin      bool `toml:"public_join" json:"public_join"`
+		StripSignatures bool `toml:"strip_signatures" json:"strip_signatures"`
+	} `toml:"policy" json:"policy"`
 
 	Groups struct {
-		Enabled  bool `toml:"enabled"`
-		AutoJoin bool `toml:"auto_join"`
-	} `toml:"groups"`
+		Enabled  bool `toml:"enabled" json:"enabled"`
+		AutoJoin bool `toml:"auto_join" json:"auto_join"`
+	} `toml:"groups" json:"groups"`
 
 	Push struct {
-		Enabled bool `toml:"enabled"`
-	} `toml:"push"`
+		Enabled bool `toml:"enabled" json:"enabled"`
+	} `toml:"push" json:"push"`
 
 	Management struct {
-		Enabled bool     `toml:"enabled"`
-		Methods []string `toml:"methods"`
-	} `toml:"management"`
+		Enabled bool     `toml:"enabled" json:"enabled"`
+		Methods []string `toml:"methods" json:"methods"`
+	} `toml:"management" json:"management"`
 
 	Blossom struct {
-		Enabled bool `toml:"enabled"`
-	} `toml:"blossom"`
+		Enabled bool `toml:"enabled" json:"enabled"`
+	} `toml:"blossom" json:"blossom"`
 
-	Roles map[string]Role `toml:"roles"`
+	Roles map[string]Role `toml:"roles" json:"roles"`
 
 	// Private/parsed values
 	path   string

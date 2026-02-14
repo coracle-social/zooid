@@ -10,16 +10,8 @@ func TestConfig_IsOwner(t *testing.T) {
 	ownerPubkey := nostr.MustPubKeyFromHex("1234567890123456789012345678901234567890123456789012345678901234")
 	otherPubkey := nostr.MustPubKeyFromHex("abcdef1234567890123456789012345678901234567890123456789012345678")
 
-	config := &Config{
-		Info: struct {
-			Name        string `toml:"name"`
-			Icon        string `toml:"icon"`
-			Pubkey      string `toml:"pubkey"`
-			Description string `toml:"description"`
-		}{
-			Pubkey: ownerPubkey.Hex(),
-		},
-	}
+	config := &Config{}
+	config.Info.Pubkey = ownerPubkey.Hex()
 
 	if !config.IsOwner(ownerPubkey) {
 		t.Error("IsOwner() should return true for owner pubkey")
@@ -87,14 +79,6 @@ func TestConfig_CanManage(t *testing.T) {
 
 	config := &Config{
 		secret: nostr.Generate(),
-		Info: struct {
-			Name        string `toml:"name"`
-			Icon        string `toml:"icon"`
-			Pubkey      string `toml:"pubkey"`
-			Description string `toml:"description"`
-		}{
-			Pubkey: ownerPubkey.Hex(),
-		},
 		Roles: map[string]Role{
 			"admin": {
 				Pubkeys:   []string{adminPubkey.Hex()},
@@ -106,6 +90,7 @@ func TestConfig_CanManage(t *testing.T) {
 			},
 		},
 	}
+	config.Info.Pubkey = ownerPubkey.Hex()
 
 	if !config.CanManage(adminPubkey) {
 		t.Error("CanManage() should return true for admin")
@@ -123,14 +108,6 @@ func TestConfig_CanInvite(t *testing.T) {
 
 	config := &Config{
 		secret: nostr.Generate(),
-		Info: struct {
-			Name        string `toml:"name"`
-			Icon        string `toml:"icon"`
-			Pubkey      string `toml:"pubkey"`
-			Description string `toml:"description"`
-		}{
-			Pubkey: ownerPubkey.Hex(),
-		},
 		Roles: map[string]Role{
 			"inviter": {
 				Pubkeys:   []string{inviterPubkey.Hex()},
@@ -142,6 +119,7 @@ func TestConfig_CanInvite(t *testing.T) {
 			},
 		},
 	}
+	config.Info.Pubkey = ownerPubkey.Hex()
 
 	if !config.CanInvite(inviterPubkey) {
 		t.Error("CanInvite() should return true for inviter")
@@ -158,14 +136,6 @@ func TestConfig_MemberRole(t *testing.T) {
 
 	config := &Config{
 		secret: nostr.Generate(),
-		Info: struct {
-			Name        string `toml:"name"`
-			Icon        string `toml:"icon"`
-			Pubkey      string `toml:"pubkey"`
-			Description string `toml:"description"`
-		}{
-			Pubkey: ownerPubkey.Hex(),
-		},
 		Roles: map[string]Role{
 			"member": {
 				Pubkeys:   []string{},
@@ -173,6 +143,7 @@ func TestConfig_MemberRole(t *testing.T) {
 			},
 		},
 	}
+	config.Info.Pubkey = ownerPubkey.Hex()
 
 	roles := config.GetAllRoles(anyPubkey)
 	if len(roles) != 1 {

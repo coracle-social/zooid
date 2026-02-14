@@ -14,15 +14,6 @@ func createTestInstance() *Instance {
 	config := &Config{
 		Host:   "test.com",
 		secret: ownerSecret,
-		Info: struct {
-			Name        string `toml:"name"`
-			Icon        string `toml:"icon"`
-			Pubkey      string `toml:"pubkey"`
-			Description string `toml:"description"`
-		}{
-			Name:   "Test Relay",
-			Pubkey: ownerPubkey.Hex(),
-		},
 		Roles: map[string]Role{
 			"admin": {
 				Pubkeys:   []string{ownerPubkey.Hex()},
@@ -31,6 +22,8 @@ func createTestInstance() *Instance {
 			},
 		},
 	}
+	config.Info.Name = "Test Relay"
+	config.Info.Pubkey = ownerPubkey.Hex()
 
 	schema := &Schema{Name: "test_" + RandomString(8)}
 
