@@ -127,6 +127,7 @@ The API accepts JSON config objects and stores them as TOML files in the `CONFIG
 Endpoints:
 - `POST /relay/{id}` - Creates a new virtual relay config. Returns 201 on success, 409 if the id/schema/host already exists, 400 for invalid config.
 - `PUT /relay/{id}` - Updates an existing virtual relay config. Returns 200 on success, 404 if the id doesn't exist, 409 if the new schema/host conflicts with another relay.
+- `PATCH /relay/{id}` - Partially updates an existing virtual relay config by recursively merging the provided JSON. Returns 200 on success, 404 if the id doesn't exist, 409 if the new schema/host conflicts, 400 for invalid config. Use `null` values to remove fields.
 - `DELETE /relay/{id}` - Deletes a virtual relay config. Returns 200 on success, 404 if the id doesn't exist.
 
 ## Scripts

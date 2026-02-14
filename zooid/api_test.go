@@ -398,6 +398,158 @@ func TestAPIHandler_UpdateRelay(t *testing.T) {
 	})
 }
 
+func TestAPIHandler_PatchRelay(t *testing.T) {
+	configDir := t.TempDir()
+
+	secretKey := nostr.Generate()
+	pubkey := secretKey.Public()
+	whitelist := pubkey.Hex()
+	api := NewAPIHandler(whitelist, configDir)
+
+	// Create initial relay with full config
+	initialConfig := map[string]interface{}{
+		"host":   "relay.example.com",
+		"schema": "testrelay",
+		"secret": secretKey.Hex(),
+		"info": map[string]interface{}{
+			"name":        "Original Name",
+			"icon":        "https://example.com/original.png",
+			"pubkey":      pubkey.Hex(),
+			"description": "Original description",
+		},
+		"policy": map[string]interface{}{
+			"public_join":      false,
+			"strip_signatures": false,
+		},
+		"groups": map[string]interface{}{
+			"enabled":   true,
+			"auto_join": false,
+		},
+	}
+	body, _ := json.Marshal(initialConfig)
+	req := createAuthenticatedRequest(http.MethodPost, "http://api.example.com/relay/testrelay", secretKey, body)
+	w := httptest.NewRecorder()
+	api.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("failed to create initial relay: %d - %s", w.Code, w.Body.String())
+	}
+
+	t.Run("patch existing relay - update single field", func(t *testing.T) {
+		patch := map[string]interface{}{
+			"info": map[string]interface{}{
+				"name": "Patched Name",
+			},
+		}
+		body, _ := json.Marshal(patch)
+		req := createAuthenticatedRequest(http.MethodPatch, "http://api.example.com/relay/testrelay", secretKey, body)
+		w := httptest.NewRecorder()
+
+		api.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("patch existing relay - update nested fields", func(t *testing.T) {
+		patch := map[string]interface{}{
+			"info": map[string]interface{}{
+				"description": "Updated description",
+				"icon":        "https://example.com/new-icon.png",
+			},
+			"policy": map[string]interface{}{
+				"public_join": true,
+			},
+		}
+		body, _ := json.Marshal(patch)
+		req := createAuthenticatedRequest(http.MethodPatch, "http://api.example.com/relay/testrelay", secretKey, body)
+		w := httptest.NewRecorder()
+
+		api.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("patch non-existent relay returns not found", func(t *testing.T) {
+		patch := map[string]interface{}{
+			"info": map[string]interface{}{
+				"name": "New Name",
+			},
+		}
+		body, _ := json.Marshal(patch)
+		req := createAuthenticatedRequest(http.MethodPatch, "http://api.example.com/relay/nonexistent", secretKey, body)
+		w := httptest.NewRecorder()
+
+		api.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("expected status %d, got %d", http.StatusNotFound, w.Code)
+		}
+	})
+
+	t.Run("patch with duplicate schema returns conflict", func(t *testing.T) {
+		// Create another relay first
+		otherConfig := map[string]interface{}{
+			"host":   "other.example.com",
+			"schema": "anotherrelay",
+			"secret": secretKey.Hex(),
+		}
+		body, _ := json.Marshal(otherConfig)
+		req := createAuthenticatedRequest(http.MethodPost, "http://api.example.com/relay/anotherrelay", secretKey, body)
+		w := httptest.NewRecorder()
+		api.ServeHTTP(w, req)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("failed to create other relay: %d", w.Code)
+		}
+
+		// Try to patch first relay with second relay's schema
+		patch := map[string]interface{}{
+			"schema": "anotherrelay", // Duplicate
+		}
+		body, _ = json.Marshal(patch)
+		req = createAuthenticatedRequest(http.MethodPatch, "http://api.example.com/relay/testrelay", secretKey, body)
+		w = httptest.NewRecorder()
+
+		api.ServeHTTP(w, req)
+
+		if w.Code != http.StatusConflict {
+			t.Errorf("expected status %d, got %d", http.StatusConflict, w.Code)
+		}
+	})
+
+	t.Run("patch with invalid secret key", func(t *testing.T) {
+		patch := map[string]interface{}{
+			"secret": "not-a-valid-hex-key",
+		}
+		body, _ := json.Marshal(patch)
+		req := createAuthenticatedRequest(http.MethodPatch, "http://api.example.com/relay/testrelay", secretKey, body)
+		w := httptest.NewRecorder()
+
+		api.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected status %d, got %d", http.StatusBadRequest, w.Code)
+		}
+	})
+
+	t.Run("patch removing required field fails", func(t *testing.T) {
+		patch := map[string]interface{}{
+			"host": nil,
+		}
+		body, _ := json.Marshal(patch)
+		req := createAuthenticatedRequest(http.MethodPatch, "http://api.example.com/relay/testrelay", secretKey, body)
+		w := httptest.NewRecorder()
+
+		api.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected status %d, got %d", http.StatusBadRequest, w.Code)
+		}
+	})
+}
+
 func TestAPIHandler_DeleteRelay(t *testing.T) {
 	configDir := t.TempDir()
 

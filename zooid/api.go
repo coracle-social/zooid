@@ -110,6 +110,8 @@ func (api *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		api.createRelay(w, r, id)
 	case http.MethodPut:
 		api.updateRelay(w, r, id)
+	case http.MethodPatch:
+		api.patchRelay(w, r, id)
 	case http.MethodDelete:
 		api.deleteRelay(w, r, id)
 	default:
@@ -268,6 +270,146 @@ func (api *APIHandler) updateRelay(w http.ResponseWriter, r *http.Request, id st
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "relay updated successfully"})
+}
+
+// patchRelay partially updates an existing relay config by recursively merging changes
+func (api *APIHandler) patchRelay(w http.ResponseWriter, r *http.Request, id string) {
+	configPath := filepath.Join(api.configDir, id+".toml")
+
+	// Check if file exists
+	if _, err := os.Stat(configPath); err != nil {
+		if os.IsNotExist(err) {
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]string{"error": "relay not found"})
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("failed to check config: %v", err)})
+		return
+	}
+
+	// Read existing config
+	var existingConfig RelayConfigJSON
+	if _, err := toml.DecodeFile(configPath, &existingConfig); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("failed to read existing config: %v", err)})
+		return
+	}
+
+	// Read and parse the patch
+	r.Body = http.MaxBytesReader(nil, r.Body, 1024*1024) // 1MB limit
+	defer r.Body.Close()
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("failed to read body: %v", err)})
+		return
+	}
+
+	var patch map[string]interface{}
+	if err := json.Unmarshal(body, &patch); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("invalid json: %v", err)})
+		return
+	}
+
+	// Convert existing config to map for merging
+	existingJSON, _ := json.Marshal(existingConfig)
+	var existingMap map[string]interface{}
+	json.Unmarshal(existingJSON, &existingMap)
+
+	// Recursively merge patch into existing
+	mergedMap := deepMerge(existingMap, patch)
+
+	// Convert back to RelayConfigJSON
+	mergedJSON, _ := json.Marshal(mergedMap)
+	var mergedConfig RelayConfigJSON
+	if err := json.Unmarshal(mergedJSON, &mergedConfig); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("failed to process merged config: %v", err)})
+		return
+	}
+
+	// Validate required fields are still present
+	if mergedConfig.Host == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "host is required"})
+		return
+	}
+	if mergedConfig.Schema == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "schema is required"})
+		return
+	}
+	if mergedConfig.Secret == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "secret is required"})
+		return
+	}
+
+	// Validate the secret key
+	if _, err := nostr.SecretKeyFromHex(mergedConfig.Secret); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("invalid secret key: %v", err)})
+		return
+	}
+
+	// Validate info.pubkey if provided
+	if mergedConfig.Info.Pubkey != "" {
+		if _, err := nostr.PubKeyFromHex(mergedConfig.Info.Pubkey); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("invalid info.pubkey: %v", err)})
+			return
+		}
+	}
+
+	// Check for duplicate schema or host (excluding this config file)
+	if err := api.checkDuplicateSchemaOrHost(&mergedConfig, id+".toml"); err != nil {
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	// Convert to TOML and write
+	if err := api.writeConfigAsTOML(configPath, &mergedConfig); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("failed to write config: %v", err)})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "relay patched successfully"})
+}
+
+// deepMerge recursively merges patch into base
+func deepMerge(base, patch map[string]interface{}) map[string]interface{} {
+	result := make(map[string]interface{})
+
+	// Copy all values from base
+	for k, v := range base {
+		result[k] = v
+	}
+
+	// Apply patches
+	for k, v := range patch {
+		if v == nil {
+			// Remove key if explicitly set to null
+			delete(result, k)
+		} else if patchMap, ok := v.(map[string]interface{}); ok {
+			// Recursively merge nested maps
+			if baseMap, ok := base[k].(map[string]interface{}); ok {
+				result[k] = deepMerge(baseMap, patchMap)
+			} else {
+				result[k] = v
+			}
+		} else {
+			// Replace value
+			result[k] = v
+		}
+	}
+
+	return result
 }
 
 // deleteRelay deletes a relay config file
