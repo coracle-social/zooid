@@ -49,4 +49,4 @@ require (
 	golang.org/x/text v0.28.0 // indirect
 )
 
-replace fiatjaf.com/nostr => git.coracle.social/Coracle/nostrlib v0.0.0-20260209224037-43de47addbce
+replace fiatjaf.com/nostr => gitea.coracle.social/Coracle/nostrlib v0.0.0-20260226033137-d6812c040a53

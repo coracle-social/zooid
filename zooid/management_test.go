@@ -75,6 +75,48 @@ func TestManagementStore_AllowPubkey(t *testing.T) {
 	}
 }
 
+func TestManagementStore_UnbanPubkey(t *testing.T) {
+	mgmt := createTestManagementStore()
+
+	pubkey := nostr.Generate().Public()
+
+	mgmt.BanPubkey(pubkey, "test")
+
+	if !mgmt.PubkeyIsBanned(pubkey) {
+		t.Error("Setup: pubkey should be banned")
+	}
+
+	if err := mgmt.UnbanPubkey(pubkey, "appeal accepted"); err != nil {
+		t.Fatalf("UnbanPubkey() should not return error: %v", err)
+	}
+
+	if mgmt.PubkeyIsBanned(pubkey) {
+		t.Error("PubkeyIsBanned() should return false after unbanning")
+	}
+}
+
+func TestManagementStore_UnallowPubkey(t *testing.T) {
+	mgmt := createTestManagementStore()
+
+	pubkey := nostr.Generate().Public()
+
+	if err := mgmt.AllowPubkey(pubkey); err != nil {
+		t.Fatalf("AllowPubkey() should not return error: %v", err)
+	}
+
+	if !mgmt.IsMember(pubkey) {
+		t.Error("Setup: pubkey should be a member")
+	}
+
+	if err := mgmt.UnallowPubkey(pubkey, "membership revoked"); err != nil {
+		t.Fatalf("UnallowPubkey() should not return error: %v", err)
+	}
+
+	if mgmt.IsMember(pubkey) {
+		t.Error("IsMember() should return false after unallowing")
+	}
+}
+
 func TestManagementStore_BanEvent(t *testing.T) {
 	mgmt := createTestManagementStore()
 

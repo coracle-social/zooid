@@ -1,5 +1,5 @@
-git.coracle.social/Coracle/nostrlib v0.0.0-20260209224037-43de47addbce h1:FG5FSVNoA37kcojItd0dKfK/o97BitPPFA5+ZUVcQT8=
-git.coracle.social/Coracle/nostrlib v0.0.0-20260209224037-43de47addbce/go.mod h1:ue7yw0zHfZj23Ml2kVSdBx0ENEaZiuvGxs/8VEN93FU=
+gitea.coracle.social/Coracle/nostrlib v0.0.0-20260226033137-d6812c040a53 h1:HJ7KJ7IhEtqOe5vR3fPBIDYksTr75kbvICFiMurhgYY=
+gitea.coracle.social/Coracle/nostrlib v0.0.0-20260226033137-d6812c040a53/go.mod h1:ue7yw0zHfZj23Ml2kVSdBx0ENEaZiuvGxs/8VEN93FU=
 github.com/BurntSushi/toml v1.5.0 h1:W5quZX/G/csjUnuI8SUYlsHs9M38FC7znL0lIO+DvMg=
 github.com/BurntSushi/toml v1.5.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
 github.com/ImVexed/fasturl v0.0.0-20230304231329-4e41488060f3 h1:ClzzXMDDuUbWfNNZqGeYq4PnYOlwlOVIvSyNaIy0ykg=
