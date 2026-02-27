@@ -227,7 +227,31 @@ func (instance *Instance) OnConnect(ctx context.Context) {
 }
 
 func (instance *Instance) PreventBroadcast(ws *khatru.WebSocket, filter nostr.Filter, event nostr.Event) bool {
-	return IsWriteOnlyEvent(event)
+	if !IsReadableEvent(event) {
+		return true
+	}
+
+	if instance.Groups.IsGroupEvent(event) {
+		for _, pubkey := range ws.AuthedPublicKeys {
+			if instance.Groups.CanRead(pubkey, event) {
+				return false
+			}
+		}
+
+		return true
+	}
+
+	if event.Kind == PUSH_SUBSCRIPTION {
+		for _, pubkey := range ws.AuthedPublicKeys {
+			if event.PubKey == pubkey {
+				return false
+			}
+		}
+
+		return true
+	}
+
+	return false
 }
 
 func (instance *Instance) StoreEvent(ctx context.Context, event nostr.Event) error {
