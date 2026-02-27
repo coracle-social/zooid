@@ -9,6 +9,7 @@ import (
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/eventstore"
 	"fiatjaf.com/nostr/khatru/blossom"
+	"github.com/gosimple/slug"
 	"github.com/spf13/afero"
 )
 
@@ -18,8 +19,9 @@ type BlossomStore struct {
 }
 
 func (bl *BlossomStore) Enable(instance *Instance) {
-	dir := Env("MEDIA")
+	dir := Env("MEDIA") + "/" + slug.Make(bl.Config.Schema)
 	fs := afero.NewOsFs()
+	fs.MkdirAll(dir, 0755)
 	backend := blossom.New(instance.Relay, "https://"+bl.Config.Host)
 
 	backend.Store = blossom.EventStoreBlobIndexWrapper{
