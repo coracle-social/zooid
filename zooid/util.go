@@ -1,10 +1,15 @@
 package zooid
 
 import (
-	"fiatjaf.com/nostr"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
 	"math/rand"
+	"net/http"
 	"slices"
 	"strings"
+
+	"fiatjaf.com/nostr"
 )
 
 const (
@@ -146,4 +151,62 @@ func IsEmptyEvent(event nostr.Event) bool {
 	var zeroID nostr.ID
 
 	return event.ID == zeroID
+}
+
+func validateNIP98Auth(r *http.Request) (nostr.PubKey, error) {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		return nostr.PubKey{}, fmt.Errorf("missing authorization header")
+	}
+
+	parts := strings.SplitN(authHeader, " ", 2)
+	if len(parts) != 2 || strings.ToLower(parts[0]) != "nostr" {
+		return nostr.PubKey{}, fmt.Errorf("invalid authorization header format")
+	}
+
+	eventJSON, err := base64.StdEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nostr.PubKey{}, fmt.Errorf("invalid base64 encoding: %w", err)
+	}
+
+	var event nostr.Event
+	if err := json.Unmarshal(eventJSON, &event); err != nil {
+		return nostr.PubKey{}, fmt.Errorf("invalid event json: %w", err)
+	}
+
+	if event.Kind != nostr.KindHTTPAuth {
+		return nostr.PubKey{}, fmt.Errorf("invalid event kind: expected %d, got %d", nostr.KindHTTPAuth, event.Kind)
+	}
+
+	if !event.VerifySignature() {
+		return nostr.PubKey{}, fmt.Errorf("invalid event signature")
+	}
+
+	expectedURL := fmt.Sprintf("%s://%s%s", scheme(r), r.Host, r.URL.Path)
+	var hasURL, hasMethod bool
+
+	for _, tag := range event.Tags {
+		if len(tag) < 2 {
+			continue
+		}
+		switch tag[0] {
+		case "u":
+			if tag[1] == expectedURL {
+				hasURL = true
+			}
+		case "method":
+			if strings.ToUpper(tag[1]) == r.Method {
+				hasMethod = true
+			}
+		}
+	}
+
+	if !hasURL {
+		return nostr.PubKey{}, fmt.Errorf("event missing or invalid u tag")
+	}
+	if !hasMethod {
+		return nostr.PubKey{}, fmt.Errorf("event missing or invalid method tag")
+	}
+
+	return event.PubKey, nil
 }

@@ -322,6 +322,13 @@ func (g *GroupStore) CheckWrite(event nostr.Event) string {
 		}
 	}
 
+	if HasTag(meta.Tags, "no-text") &&
+		!slices.Contains(nip29.ModerationEventKinds, event.Kind) &&
+		event.Kind != nostr.KindSimpleGroupJoinRequest &&
+		event.Kind != nostr.KindSimpleGroupLeaveRequest {
+		return "blocked: this group does not allow text events"
+	}
+
 	if HasTag(meta.Tags, "closed") && !g.HasAccess(h, event.PubKey) {
 		return "restricted: you are not a member of that group"
 	}
