@@ -709,7 +709,6 @@ func TestAPIHandler_ConfigValidation(t *testing.T) {
 			},
 			"management": map[string]interface{}{
 				"enabled": true,
-				"methods": []string{"invite"},
 			},
 			"blossom": map[string]interface{}{
 				"enabled": true,

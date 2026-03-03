@@ -41,8 +41,7 @@ type Config struct {
 	} `toml:"push" json:"push"`
 
 	Management struct {
-		Enabled bool     `toml:"enabled" json:"enabled"`
-		Methods []string `toml:"methods" json:"methods"`
+		Enabled bool `toml:"enabled" json:"enabled"`
 	} `toml:"management" json:"management"`
 
 	Blossom struct {

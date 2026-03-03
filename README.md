@@ -53,7 +53,6 @@ Configures NIP 29 support.
 Configures NIP 86 support.
 
 - `enabled` - whether NIP 86 is enabled.
-- `methods` - a list of [NIP 86](https://github.com/nostr-protocol/nips/blob/master/86.md) relay management methods enabled for this relay.
 
 ### `[blossom]`
 
@@ -102,7 +101,6 @@ auto_join = false
 
 [management]
 enabled = true
-methods = ["supportedmethods", "banpubkey", "allowpubkey"]
 
 [blossom]
 enabled = false
