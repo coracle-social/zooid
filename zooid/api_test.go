@@ -422,8 +422,7 @@ func TestAPIHandler_PatchRelay(t *testing.T) {
 			"strip_signatures": false,
 		},
 		"groups": map[string]interface{}{
-			"enabled":   true,
-			"auto_join": false,
+			"enabled": true,
 		},
 	}
 	body, _ := json.Marshal(initialConfig)
@@ -701,8 +700,7 @@ func TestAPIHandler_ConfigValidation(t *testing.T) {
 				"strip_signatures": false,
 			},
 			"groups": map[string]interface{}{
-				"enabled":   true,
-				"auto_join": true,
+				"enabled": true,
 			},
 			"push": map[string]interface{}{
 				"enabled": true,
