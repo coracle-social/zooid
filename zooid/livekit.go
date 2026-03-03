@@ -120,7 +120,7 @@ func (instance *Instance) livekitTokenHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if !instance.Groups.HasAccess(groupId, pubkey) {
+	if HasTag(meta.Tags, "restricted") && !instance.Groups.HasAccess(groupId, pubkey) {
 		http.Error(w, "not a group member", http.StatusForbidden)
 		return
 	}
