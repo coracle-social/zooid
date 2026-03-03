@@ -24,15 +24,11 @@ type TokenEndpointResponse struct {
 }
 
 func generateLivekitToken(apiKey, apiSecret, room string, pubkey nostr.PubKey) string {
-	grant := &auth.VideoGrant{
+	at := auth.NewAccessToken(apiKey, apiSecret)
+	at.SetVideoGrant(&auth.VideoGrant{
 		RoomJoin: true,
 		Room:     room,
-	}
-	grant.SetCanPublish(true)
-	grant.SetCanSubscribe(true)
-
-	at := auth.NewAccessToken(apiKey, apiSecret)
-	at.SetVideoGrant(grant)
+	})
 	at.SetIdentity(pubkey.Hex())
 
 	jwt, _ := at.ToJWT()
