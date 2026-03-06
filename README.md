@@ -75,6 +75,14 @@ Defines roles that can be assigned to different users and attendant privileges. 
 
 A special `[roles.member]` heading may be used to configure policies for all relay users (that is, pubkeys assigned to other roles, or who have redeemed an invite code).
 
+### `[livekit]`
+
+[Livekit](https://livekit.io/) is an open source WebSockets toolkit for audio and video calls. Configuring a livekit server allows clients to start audio and video calls.
+
+- `server_url` - the URL to your Livekit server.
+- `api_key` - a key identifying this relay, assigned by the Livekit server.
+- `api_secret` - a secret key authenticating this relay, assigned by the Livekit server.
+
 ### Example
 
 The below config file might be saved as `./config/my-relay.example.com` in order to route requests from `wss://my-relay.example.com` to this virtual relay.
@@ -121,6 +129,7 @@ When `API_HOST` and `API_WHITELIST` are configured, a JSON REST API is available
 The API accepts JSON config objects and stores them as TOML files in the `CONFIG` directory. Configs are validated for required fields (`host`, `schema`, `secret`) and duplicate checking (`schema` and `host` must be unique across all relays).
 
 Endpoints:
+
 - `POST /relay/{id}` - Creates a new virtual relay config. Returns 201 on success, 409 if the id/schema/host already exists, 400 for invalid config.
 - `PUT /relay/{id}` - Updates an existing virtual relay config. Returns 200 on success, 404 if the id doesn't exist, 409 if the new schema/host conflicts with another relay.
 - `PATCH /relay/{id}` - Partially updates an existing virtual relay config by recursively merging the provided JSON. Returns 200 on success, 404 if the id doesn't exist, 409 if the new schema/host conflicts, 400 for invalid config. Use `null` values to remove fields.
@@ -149,4 +158,3 @@ podman run -it \
   -v ./data:/app/data \
   ghcr.io/coracle-social/zooid
 ```
-
