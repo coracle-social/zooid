@@ -32,8 +32,7 @@ type Config struct {
 	} `toml:"policy" json:"policy"`
 
 	Groups struct {
-		Enabled  bool `toml:"enabled" json:"enabled"`
-		AutoJoin bool `toml:"auto_join" json:"auto_join"`
+		Enabled bool `toml:"enabled" json:"enabled"`
 	} `toml:"groups" json:"groups"`
 
 	Push struct {
@@ -41,8 +40,7 @@ type Config struct {
 	} `toml:"push" json:"push"`
 
 	Management struct {
-		Enabled bool     `toml:"enabled" json:"enabled"`
-		Methods []string `toml:"methods" json:"methods"`
+		Enabled bool `toml:"enabled" json:"enabled"`
 	} `toml:"management" json:"management"`
 
 	Blossom struct {

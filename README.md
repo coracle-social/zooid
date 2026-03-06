@@ -46,14 +46,12 @@ Contains policy and access related configuration.
 Configures NIP 29 support.
 
 - `enabled` - whether NIP 29 is enabled.
-- `auto_join` - whether relay members can join groups without approval. Defaults to `false`.
 
 ### `[management]`
 
 Configures NIP 86 support.
 
 - `enabled` - whether NIP 86 is enabled.
-- `methods` - a list of [NIP 86](https://github.com/nostr-protocol/nips/blob/master/86.md) relay management methods enabled for this relay.
 
 ### `[blossom]`
 
@@ -98,11 +96,9 @@ strip_signatures = false
 
 [groups]
 enabled = true
-auto_join = false
 
 [management]
 enabled = true
-methods = ["supportedmethods", "banpubkey", "allowpubkey"]
 
 [blossom]
 enabled = false
