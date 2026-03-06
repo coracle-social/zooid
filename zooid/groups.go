@@ -325,7 +325,8 @@ func (g *GroupStore) CheckWrite(event nostr.Event) string {
 	if HasTag(meta.Tags, "no-text") &&
 		!slices.Contains(nip29.ModerationEventKinds, event.Kind) &&
 		event.Kind != nostr.KindSimpleGroupJoinRequest &&
-		event.Kind != nostr.KindSimpleGroupLeaveRequest {
+		event.Kind != nostr.KindSimpleGroupLeaveRequest &&
+		event.Kind != 10312 /* hardcoded temporarily while NIP is hashed out */ {
 		return "blocked: this group does not allow text events"
 	}
 
