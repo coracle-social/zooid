@@ -8,6 +8,7 @@ require (
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gosimple/slug v1.15.0
+	github.com/livekit/protocol v1.43.5-0.20260114074149-a8bb8204ce69
 	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/spf13/afero v1.15.0
 )
@@ -48,7 +49,6 @@ require (
 	github.com/liamg/magic v0.0.1 // indirect
 	github.com/lithammer/shortuuid/v4 v4.2.0 // indirect
 	github.com/livekit/mageutil v0.0.0-20250511045019-0f1ff63f7731 // indirect
-	github.com/livekit/protocol v1.43.5-0.20260114074149-a8bb8204ce69 // indirect
 	github.com/livekit/psrpc v0.7.1 // indirect
 	github.com/mailru/easyjson v0.9.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
@@ -94,7 +94,6 @@ require (
 	go.uber.org/zap/exp v0.3.0 // indirect
 	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
-	golang.org/x/mod v0.29.0 // indirect
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/sync v0.18.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
