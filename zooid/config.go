@@ -47,6 +47,12 @@ type Config struct {
 		Enabled bool `toml:"enabled" json:"enabled"`
 	} `toml:"blossom" json:"blossom"`
 
+	Livekit struct {
+		ServerURL string `toml:"server_url" json:"server_url"`
+		APIKey    string `toml:"api_key" json:"api_key"`
+		APISecret string `toml:"api_secret" json:"api_secret"`
+	} `toml:"livekit" json:"livekit"`
+
 	Roles map[string]Role `toml:"roles" json:"roles"`
 
 	// Private/parsed values

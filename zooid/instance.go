@@ -113,6 +113,9 @@ func MakeInstance(filename string) (*Instance, error) {
 
 	router.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
+	router.HandleFunc("GET /.well-known/nip29/livekit/{groupId}", instance.livekitTokenHandler)
+	router.HandleFunc("OPTIONS /.well-known/nip29/livekit/{groupId}", instance.livekitTokenHandler)
+
 	// Initialize the database
 
 	if err := instance.Events.Init(); err != nil {
