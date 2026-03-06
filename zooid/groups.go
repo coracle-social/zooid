@@ -326,7 +326,7 @@ func (g *GroupStore) CheckWrite(event nostr.Event) string {
 		!slices.Contains(nip29.ModerationEventKinds, event.Kind) &&
 		event.Kind != nostr.KindSimpleGroupJoinRequest &&
 		event.Kind != nostr.KindSimpleGroupLeaveRequest &&
-		event.Kind != 10312 /* hardcoded temporarily while NIP is hashed out */ {
+		event.Kind != ROOM_PRESENCE {
 		return "blocked: this group does not allow text events"
 	}
 

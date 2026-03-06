@@ -48,8 +48,10 @@ func generateLivekitServerToken(apiKey, apiSecret string) string {
 }
 
 func ensureLivekitRoom(apiKey, apiSecret, serverURL, roomName string) error {
+	roomKey := serverURL + "'" + roomName
+
 	livekitRoomsMu.RLock()
-	if livekitRooms[roomName] {
+	if livekitRooms[roomKey] {
 		livekitRoomsMu.RUnlock()
 		return nil
 	}
@@ -78,7 +80,7 @@ func ensureLivekitRoom(apiKey, apiSecret, serverURL, roomName string) error {
 
 	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusConflict {
 		livekitRoomsMu.Lock()
-		livekitRooms[roomName] = true
+		livekitRooms[roomKey] = true
 		livekitRoomsMu.Unlock()
 		return nil
 	}
@@ -106,6 +108,11 @@ func (instance *Instance) livekitTokenHandler(w http.ResponseWriter, r *http.Req
 	pubkey, err := validateNIP98Auth(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	if !instance.Management.IsMember(pubkey) {
+		http.Error(w, "not a member of this relay", http.StatusForbidden)
 		return
 	}
 
