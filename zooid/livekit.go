@@ -257,7 +257,7 @@ func (instance *Instance) getLiveKitParticipants(groupId string) []nostr.PubKey 
 
 	for event := range instance.Events.QueryEvents(filter, 1) {
 		var participants []nostr.PubKey
-		for tag := range event.Tags.FindAll("p") {
+		for tag := range event.Tags.FindAll("participant") {
 			if pk, err := nostr.PubKeyFromHex(tag[1]); err == nil {
 				participants = append(participants, pk)
 			}
@@ -270,7 +270,7 @@ func (instance *Instance) getLiveKitParticipants(groupId string) []nostr.PubKey 
 func (instance *Instance) publishLiveKitPresence(groupId string, participants []nostr.PubKey) error {
 	tags := nostr.Tags{nostr.Tag{"d", groupId}}
 	for _, pk := range participants {
-		tags = append(tags, nostr.Tag{"p", pk.Hex()})
+		tags = append(tags, nostr.Tag{"participant", pk.Hex()})
 	}
 
 	event := nostr.Event{
