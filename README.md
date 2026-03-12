@@ -83,6 +83,8 @@ A special `[roles.member]` heading may be used to configure policies for all rel
 - `api_key` - a key identifying this relay, assigned by the Livekit server.
 - `api_secret` - a secret key authenticating this relay, assigned by the Livekit server.
 
+On your LiveKit server you should also set up a webhook that points to `https://yourrelay.com/.well-known/nip29/livekit/webhook`. This allows LiveKit to notify your relay when people join rooms so it can publish a kind 39004 event.
+
 ### Example
 
 The below config file might be saved as `./config/my-relay.example.com` in order to route requests from `wss://my-relay.example.com` to this virtual relay.

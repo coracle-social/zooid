@@ -11,7 +11,7 @@ import (
 func GetGroupIDFromEvent(event nostr.Event) string {
 	var tagName string
 
-	if slices.Contains(nip29.MetadataEventKinds, event.Kind) {
+	if slices.Contains(nip29.MetadataEventKinds, event.Kind) || event.Kind == nostr.KindSimpleGroupLiveKitParticipants {
 		tagName = "d"
 	} else {
 		tagName = "h"
@@ -231,6 +231,10 @@ func (g *GroupStore) IsGroupEvent(event nostr.Event) bool {
 		return true
 	}
 
+	if event.Kind == nostr.KindSimpleGroupLiveKitParticipants {
+		return true
+	}
+
 	if slices.Contains(nip29.ModerationEventKinds, event.Kind) {
 		return true
 	}
@@ -283,6 +287,10 @@ func (g *GroupStore) CheckWrite(event nostr.Event) string {
 		return "invalid: groups are not enabled"
 	}
 
+	if event.Kind == nostr.KindSimpleGroupLiveKitParticipants {
+		return "invalid: presence events are relay-generated"
+	}
+
 	if slices.Contains(nip29.MetadataEventKinds, event.Kind) {
 		return "invalid: group metadata cannot be set directly"
 	}
@@ -320,14 +328,6 @@ func (g *GroupStore) CheckWrite(event nostr.Event) string {
 		} else {
 			return ""
 		}
-	}
-
-	if HasTag(meta.Tags, "no-text") &&
-		!slices.Contains(nip29.ModerationEventKinds, event.Kind) &&
-		event.Kind != nostr.KindSimpleGroupJoinRequest &&
-		event.Kind != nostr.KindSimpleGroupLeaveRequest &&
-		event.Kind != ROOM_PRESENCE {
-		return "blocked: this group does not allow text events"
 	}
 
 	if HasTag(meta.Tags, "closed") && !g.HasAccess(h, event.PubKey) {
