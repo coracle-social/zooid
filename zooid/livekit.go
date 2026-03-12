@@ -170,6 +170,7 @@ func (instance *Instance) livekitTokenHandler(w http.ResponseWriter, r *http.Req
 func (instance *Instance) livekitWebhookHandler(w http.ResponseWriter, r *http.Request) {
 	cfg := instance.Config.Livekit
 	if cfg.APIKey == "" || cfg.APISecret == "" {
+		log.Printf("[livekit webhook] 404: livekit not configured")
 		http.NotFound(w, r)
 		return
 	}
@@ -177,28 +178,35 @@ func (instance *Instance) livekitWebhookHandler(w http.ResponseWriter, r *http.R
 	kp := auth.NewSimpleKeyProvider(cfg.APIKey, cfg.APISecret)
 	event, err := webhook.ReceiveWebhookEvent(r, kp)
 	if err != nil {
+		log.Printf("[livekit webhook] invalid webhook: %v", err)
 		http.Error(w, "invalid webhook: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
+	log.Printf("[livekit webhook] received event: %s", event.Event)
+
 	room := event.GetRoom()
 	if room == nil {
+		log.Printf("[livekit webhook] missing room in event")
 		http.Error(w, "missing room", http.StatusBadRequest)
 		return
 	}
 	groupId := room.GetName()
 	if groupId == "" {
+		log.Printf("[livekit webhook] missing room name")
 		http.Error(w, "missing room name", http.StatusBadRequest)
 		return
 	}
 
 	meta, found := instance.Groups.GetMetadata(groupId)
 	if !found {
+		log.Printf("[livekit webhook] group not found: %s", groupId)
 		http.NotFound(w, r)
 		return
 	}
 
 	if !HasTag(meta.Tags, "livekit") {
+		log.Printf("[livekit webhook] livekit not enabled for group: %s", groupId)
 		http.Error(w, "livekit not enabled for this group", http.StatusForbidden)
 		return
 	}
@@ -206,24 +214,38 @@ func (instance *Instance) livekitWebhookHandler(w http.ResponseWriter, r *http.R
 	switch event.Event {
 	case webhook.EventParticipantJoined, webhook.EventParticipantLeft:
 		participant := event.GetParticipant()
-		if participant == nil || len(participant.Identity) < 64 {
+		if participant == nil {
+			log.Printf("[livekit webhook] missing participant in %s event for room %s", event.Event, groupId)
+			http.Error(w, "missing participant", http.StatusBadRequest)
+			return
+		}
+		if len(participant.Identity) < 64 {
+			log.Printf("[livekit webhook] participant identity too short (%d chars) in %s for room %s: %q",
+				len(participant.Identity), event.Event, groupId, participant.Identity)
 			http.Error(w, "missing participant", http.StatusBadRequest)
 			return
 		}
 
-		pubkey, err := nostr.PubKeyFromHex(participant.Identity[0:64])
+		identityPrefix := participant.Identity[0:64]
+		pubkey, err := nostr.PubKeyFromHex(identityPrefix)
 		if err != nil {
-			log.Printf("invalid nostr pubkey in livekit webhook: %v", err)
+			log.Printf("[livekit webhook] invalid nostr pubkey in identity %q: %v", participant.Identity, err)
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 
 		connected := event.Event == webhook.EventParticipantJoined
+		log.Printf("[livekit webhook] %s room=%s pubkey=%s connected=%v",
+			event.Event, groupId, pubkey.Hex()[:16]+"...", connected)
+
 		if err := instance.updateLiveKitPresence(groupId, pubkey, connected); err != nil {
+			log.Printf("[livekit webhook] failed to update presence: %v", err)
 			http.Error(w, "failed to update livekit participants: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
+		log.Printf("[livekit webhook] successfully updated presence for room %s", groupId)
 	default:
+		log.Printf("[livekit webhook] ignoring unhandled event type: %s for room %s", event.Event, groupId)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -233,6 +255,7 @@ func (instance *Instance) livekitWebhookHandler(w http.ResponseWriter, r *http.R
 
 func (instance *Instance) updateLiveKitPresence(groupId string, pubkey nostr.PubKey, connected bool) error {
 	participants := instance.getLiveKitParticipants(groupId)
+	beforeCount := len(participants)
 
 	if connected {
 		if !slices.Contains(participants, pubkey) {
@@ -242,8 +265,14 @@ func (instance *Instance) updateLiveKitPresence(groupId string, pubkey nostr.Pub
 		if idx := slices.Index(participants, pubkey); idx != -1 {
 			participants[idx] = participants[len(participants)-1]
 			participants = participants[:len(participants)-1]
+		} else {
+			log.Printf("[livekit webhook] participant %s not in list when processing leave (had %d participants)",
+				pubkey.Hex()[:16]+"...", beforeCount)
 		}
 	}
+
+	log.Printf("[livekit webhook] presence update: room=%s connected=%v before=%d after=%d",
+		groupId, connected, beforeCount, len(participants))
 
 	return instance.publishLiveKitPresence(groupId, participants)
 }
@@ -262,8 +291,10 @@ func (instance *Instance) getLiveKitParticipants(groupId string) []nostr.PubKey 
 				participants = append(participants, pk)
 			}
 		}
+		log.Printf("[livekit webhook] loaded %d participants from existing 39004 for room %s", len(participants), groupId)
 		return participants
 	}
+	log.Printf("[livekit webhook] no existing 39004 event for room %s, starting with empty list", groupId)
 	return nil
 }
 
