@@ -211,15 +211,14 @@ func (instance *Instance) livekitWebhookHandler(w http.ResponseWriter, r *http.R
 			return
 		}
 
-		pubkey, err := nostr.PubKeyFromHex(participant.Identity[0:64])
-		if err != nil {
-			log.Printf("invalid nostr pubkey in livekit webhook: %v", err)
+		if _, err := nostr.PubKeyFromHex(participant.Identity[0:64]); err != nil {
+			log.Printf("[livekit webhook] invalid nostr pubkey in identity: %v", err)
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 
 		connected := event.Event == webhook.EventParticipantJoined
-		if err := instance.updateLiveKitPresence(groupId, pubkey, connected); err != nil {
+		if err := instance.updateLiveKitPresence(groupId, participant.Identity, connected); err != nil {
 			http.Error(w, "failed to update livekit participants: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -231,24 +230,30 @@ func (instance *Instance) livekitWebhookHandler(w http.ResponseWriter, r *http.R
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (instance *Instance) updateLiveKitPresence(groupId string, pubkey nostr.PubKey, connected bool) error {
-	participants := instance.getLiveKitParticipants(groupId)
+func (instance *Instance) updateLiveKitPresence(groupId string, identity string, connected bool) error {
+	identities := instance.getLiveKitParticipantIdentities(groupId)
 
 	if connected {
-		if !slices.Contains(participants, pubkey) {
-			participants = append(participants, pubkey)
+		if !slices.Contains(identities, identity) {
+			identities = append(identities, identity)
 		}
 	} else {
-		if idx := slices.Index(participants, pubkey); idx != -1 {
-			participants[idx] = participants[len(participants)-1]
-			participants = participants[:len(participants)-1]
+		if idx := slices.Index(identities, identity); idx != -1 {
+			identities[idx] = identities[len(identities)-1]
+			identities = identities[:len(identities)-1]
+		} else {
+			log.Printf("[livekit webhook] identity %q not in list when processing leave (had %d participants)",
+				identity, len(identities))
 		}
 	}
 
-	return instance.publishLiveKitPresence(groupId, participants)
+	log.Printf("[livekit webhook] presence update: room=%s connected=%v count=%d",
+		groupId, connected, len(identities))
+
+	return instance.publishLiveKitPresence(groupId, identities)
 }
 
-func (instance *Instance) getLiveKitParticipants(groupId string) []nostr.PubKey {
+func (instance *Instance) getLiveKitParticipantIdentities(groupId string) []string {
 	filter := nostr.Filter{
 		Kinds:   []nostr.Kind{nostr.KindSimpleGroupLiveKitParticipants},
 		Authors: []nostr.PubKey{instance.Config.GetSelf()},
@@ -256,21 +261,23 @@ func (instance *Instance) getLiveKitParticipants(groupId string) []nostr.PubKey 
 	}
 
 	for event := range instance.Events.QueryEvents(filter, 1) {
-		var participants []nostr.PubKey
+		var identities []string
 		for tag := range event.Tags.FindAll("participant") {
-			if pk, err := nostr.PubKeyFromHex(tag[1]); err == nil {
-				participants = append(participants, pk)
+			if len(tag) >= 2 && tag[1] != "" {
+				if !slices.Contains(identities, tag[1]) {
+					identities = append(identities, tag[1])
+				}
 			}
 		}
-		return participants
+		return identities
 	}
 	return nil
 }
 
-func (instance *Instance) publishLiveKitPresence(groupId string, participants []nostr.PubKey) error {
+func (instance *Instance) publishLiveKitPresence(groupId string, identities []string) error {
 	tags := nostr.Tags{nostr.Tag{"d", groupId}}
-	for _, pk := range participants {
-		tags = append(tags, nostr.Tag{"participant", pk.Hex()})
+	for _, identity := range identities {
+		tags = append(tags, nostr.Tag{"participant", identity})
 	}
 
 	event := nostr.Event{
