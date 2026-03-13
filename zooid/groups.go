@@ -256,7 +256,7 @@ func (g *GroupStore) CanRead(pubkey nostr.PubKey, event nostr.Event) bool {
 	meta, found := g.GetMetadata(h)
 
 	if !found {
-		return false
+		return event.Kind == nostr.KindSimpleGroupDeleteGroup
 	}
 
 	if HasTag(meta.Tags, "hidden") && !g.HasAccess(h, pubkey) {
