@@ -387,8 +387,12 @@ func (instance *Instance) OnEventSaved(ctx context.Context, event nostr.Event) {
 	h := GetGroupIDFromEvent(event)
 
 	if event.Kind == nostr.KindSimpleGroupJoinRequest {
-		instance.Groups.AddMember(h, event.PubKey)
-		instance.Groups.UpdateMembersList(h)
+		meta, ok := instance.Groups.GetMetadata(h)
+
+		if ok && !meta.Tags.Has("closed") {
+			instance.Groups.AddMember(h, event.PubKey)
+			instance.Groups.UpdateMembersList(h)
+		}
 	}
 
 	if event.Kind == nostr.KindSimpleGroupLeaveRequest {
