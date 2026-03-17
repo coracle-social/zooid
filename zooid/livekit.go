@@ -104,8 +104,15 @@ func fetchLivekitParticipants(apiKey, apiSecret, serverURL, roomName string) ([]
 		return nil, err
 	}
 
+	at := auth.NewAccessToken(apiKey, apiSecret)
+	at.SetVideoGrant(&auth.VideoGrant{
+		RoomAdmin: true,
+		Room:      roomName,
+	})
+	token, _ := at.ToJWT()
+
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+generateLivekitServerToken(apiKey, apiSecret))
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := livekitHTTPClient.Do(req)
 	if err != nil {
