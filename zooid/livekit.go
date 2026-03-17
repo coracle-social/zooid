@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -12,7 +13,6 @@ import (
 	"fiatjaf.com/nostr"
 	"github.com/livekit/protocol/auth"
 	"github.com/livekit/protocol/webhook"
-	"slices"
 )
 
 var (
@@ -89,6 +89,60 @@ func ensureLivekitRoom(apiKey, apiSecret, serverURL, roomName string) error {
 	}
 
 	return fmt.Errorf("failed to create room: %s", resp.Status)
+}
+
+func fetchLivekitParticipants(apiKey, apiSecret, serverURL, roomName string) ([]nostr.PubKey, error) {
+	httpURL := strings.Replace(strings.Replace(serverURL, "wss://", "https://", 1), "ws://", "http://", 1)
+	url := fmt.Sprintf("%s/twirp/livekit.RoomService/ListParticipants", httpURL)
+
+	reqBody, _ := json.Marshal(map[string]interface{}{
+		"room": roomName,
+	})
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(reqBody))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+generateLivekitServerToken(apiKey, apiSecret))
+
+	resp, err := livekitHTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("ListParticipants failed: %s %s", resp.Status, string(body))
+	}
+
+	var result struct {
+		Participants []struct {
+			Identity string `json:"identity"`
+		} `json:"participants"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode ListParticipants response: %w", err)
+	}
+
+	seen := make(map[nostr.PubKey]struct{})
+	var pubkeys []nostr.PubKey
+	for _, p := range result.Participants {
+		hexPart, _, _ := strings.Cut(p.Identity, ":")
+		pk, err := nostr.PubKeyFromHex(hexPart)
+		if err != nil {
+			log.Printf("[livekit] dropping participant with unparseable identity %q: %v", p.Identity, err)
+			continue
+		}
+		if _, dup := seen[pk]; !dup {
+			seen[pk] = struct{}{}
+			pubkeys = append(pubkeys, pk)
+		}
+	}
+
+	return pubkeys, nil
 }
 
 func (instance *Instance) livekitSupportHandler(w http.ResponseWriter, r *http.Request) {
@@ -204,21 +258,19 @@ func (instance *Instance) livekitWebhookHandler(w http.ResponseWriter, r *http.R
 	}
 
 	switch event.Event {
-	case webhook.EventParticipantJoined, webhook.EventParticipantLeft:
-		participant := event.GetParticipant()
-		if participant == nil || len(participant.Identity) < 64 {
-			http.Error(w, "missing participant", http.StatusBadRequest)
+	case webhook.EventRoomFinished:
+		if err := instance.publishLiveKitPresence(groupId, nil); err != nil {
+			http.Error(w, "failed to update livekit participants: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-
-		if _, err := nostr.PubKeyFromHex(participant.Identity[0:64]); err != nil {
-			log.Printf("[livekit webhook] invalid nostr pubkey in identity: %v", err)
-			w.WriteHeader(http.StatusNoContent)
+	case webhook.EventParticipantJoined, webhook.EventParticipantLeft, webhook.EventParticipantConnectionAborted:
+		pubkeys, err := fetchLivekitParticipants(cfg.APIKey, cfg.APISecret, cfg.ServerURL, groupId)
+		if err != nil {
+			log.Printf("[livekit webhook] failed to fetch participants: %v", err)
+			http.Error(w, "failed to fetch livekit participants: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-
-		connected := event.Event == webhook.EventParticipantJoined
-		if err := instance.updateLiveKitPresence(groupId, participant.Identity, connected); err != nil {
+		if err := instance.publishLiveKitPresence(groupId, pubkeys); err != nil {
 			http.Error(w, "failed to update livekit participants: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -230,54 +282,10 @@ func (instance *Instance) livekitWebhookHandler(w http.ResponseWriter, r *http.R
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (instance *Instance) updateLiveKitPresence(groupId string, identity string, connected bool) error {
-	identities := instance.getLiveKitParticipantIdentities(groupId)
-
-	if connected {
-		if !slices.Contains(identities, identity) {
-			identities = append(identities, identity)
-		}
-	} else {
-		if idx := slices.Index(identities, identity); idx != -1 {
-			identities[idx] = identities[len(identities)-1]
-			identities = identities[:len(identities)-1]
-		} else {
-			log.Printf("[livekit webhook] identity %q not in list when processing leave (had %d participants)",
-				identity, len(identities))
-		}
-	}
-
-	log.Printf("[livekit webhook] presence update: room=%s connected=%v count=%d",
-		groupId, connected, len(identities))
-
-	return instance.publishLiveKitPresence(groupId, identities)
-}
-
-func (instance *Instance) getLiveKitParticipantIdentities(groupId string) []string {
-	filter := nostr.Filter{
-		Kinds:   []nostr.Kind{nostr.KindSimpleGroupLiveKitParticipants},
-		Authors: []nostr.PubKey{instance.Config.GetSelf()},
-		Tags:    nostr.TagMap{"d": []string{groupId}},
-	}
-
-	for event := range instance.Events.QueryEvents(filter, 1) {
-		var identities []string
-		for tag := range event.Tags.FindAll("participant") {
-			if len(tag) >= 2 && tag[1] != "" {
-				if !slices.Contains(identities, tag[1]) {
-					identities = append(identities, tag[1])
-				}
-			}
-		}
-		return identities
-	}
-	return nil
-}
-
-func (instance *Instance) publishLiveKitPresence(groupId string, identities []string) error {
+func (instance *Instance) publishLiveKitPresence(groupId string, pubkeys []nostr.PubKey) error {
 	tags := nostr.Tags{nostr.Tag{"d", groupId}}
-	for _, identity := range identities {
-		tags = append(tags, nostr.Tag{"participant", identity})
+	for _, pk := range pubkeys {
+		tags = append(tags, nostr.Tag{"participant", pk.Hex()})
 	}
 
 	event := nostr.Event{
