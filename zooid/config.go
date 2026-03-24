@@ -16,10 +16,11 @@ type Role struct {
 }
 
 type Config struct {
-	Host   string `toml:"host" json:"host"`
-	Schema string `toml:"schema" json:"schema"`
-	Secret string `toml:"secret" json:"secret"`
-	Info   struct {
+	Host     string `toml:"host" json:"host"`
+	Schema   string `toml:"schema" json:"schema"`
+	Secret   string `toml:"secret" json:"secret"`
+	Inactive bool   `toml:"inactive" json:"inactive"`
+	Info     struct {
 		Name        string `toml:"name" json:"name"`
 		Icon        string `toml:"icon" json:"icon"`
 		Pubkey      string `toml:"pubkey" json:"pubkey"`

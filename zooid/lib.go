@@ -21,6 +21,9 @@ func Dispatch(hostname string) (*Instance, bool) {
 	defer instancesMux.RUnlock()
 
 	instance, exists := instancesByHost[hostname]
+	if !exists || instance.Config.Inactive {
+		return nil, false
+	}
 
 	return instance, exists
 }
@@ -60,6 +63,8 @@ func Start() {
 
 		if err != nil {
 			log.Printf("Failed to make instance for %s: %v", entry.Name(), err)
+		} else if instance.Config.Inactive {
+			log.Printf("Skipped inactive %s", entry.Name())
 		} else {
 			instancesByHost[instance.Config.Host] = instance
 			instancesByName[entry.Name()] = instance
@@ -105,6 +110,8 @@ func Start() {
 					instance, err := MakeInstance(filename)
 					if err != nil {
 						log.Printf("Failed to reload %s: %v", filename, err)
+					} else if instance.Config.Inactive {
+						log.Printf("Skipped inactive %s", filename)
 					} else {
 						instancesByHost[instance.Config.Host] = instance
 						instancesByName[filename] = instance

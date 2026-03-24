@@ -24,6 +24,7 @@ Configuration files are written using [toml](https://toml.io). Top level configu
 - `host` - a hostname to serve this relay on.
 - `schema` - a string that identifies this relay. This cannot be changed, and must be usable as a sqlite identifier.
 - `secret` - the nostr secret key of the relay. Will be used to populate the relay's NIP 11 `self` field and sign generated events.
+- `inactive` - a boolean indicating whether the relay is currently inactive. The relay will not be available if set.
 
 ### `[info]`
 
