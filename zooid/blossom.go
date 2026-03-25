@@ -89,4 +89,9 @@ func (bl *BlossomStore) Enable(instance *Instance) {
 
 		return false, "", 200
 	}
+
+	instance.Relay.Info.SupportedNIPs = append(instance.Relay.Info.SupportedNIPs, "BUD-00")
+	instance.Relay.Info.SupportedNIPs = append(instance.Relay.Info.SupportedNIPs, "BUD-01")
+	instance.Relay.Info.SupportedNIPs = append(instance.Relay.Info.SupportedNIPs, "BUD-02")
+	instance.Relay.Info.SupportedNIPs = append(instance.Relay.Info.SupportedNIPs, "BUD-11")
 }
