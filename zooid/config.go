@@ -77,6 +77,10 @@ func LoadConfig(filename string) (*Config, error) {
 		return nil, fmt.Errorf("schema is required")
 	}
 
+	if config.Info.Pubkey == "" {
+		return nil, fmt.Errorf("info.pubkey is required")
+	}
+
 	secret, err := nostr.SecretKeyFromHex(config.Secret)
 	if err != nil {
 		return nil, err

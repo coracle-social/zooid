@@ -291,10 +291,11 @@ func (api *APIHandler) validatePatchedConfig(config *Config) error {
 	if _, err := nostr.SecretKeyFromHex(config.Secret); err != nil {
 		return fmt.Errorf("invalid secret key: %w", err)
 	}
-	if config.Info.Pubkey != "" {
-		if _, err := nostr.PubKeyFromHex(config.Info.Pubkey); err != nil {
-			return fmt.Errorf("invalid info.pubkey: %w", err)
-		}
+	if config.Info.Pubkey == "" {
+		return fmt.Errorf("info.pubkey is required")
+	}
+	if _, err := nostr.PubKeyFromHex(config.Info.Pubkey); err != nil {
+		return fmt.Errorf("invalid info.pubkey: %w", err)
 	}
 	return nil
 }
