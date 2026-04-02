@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"fiatjaf.com/nostr"
@@ -284,6 +285,9 @@ func (api *APIHandler) validatePatchedConfig(config *Config) error {
 	}
 	if config.Schema == "" {
 		return fmt.Errorf("schema is required")
+	}
+	if !regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`).MatchString(config.Schema) {
+		return fmt.Errorf("schema must contain only letters, numbers, and underscores")
 	}
 	if config.Secret == "" {
 		return fmt.Errorf("secret is required")

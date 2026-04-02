@@ -122,7 +122,7 @@ func MakeInstance(filename string) (*Instance, error) {
 	// Initialize the database
 
 	if err := instance.Events.Init(); err != nil {
-		log.Fatal("Failed to initialize event store: ", err)
+		log.Fatal("Failed to initialize event store for ", filename, ": ", err)
 	}
 
 	// Enable extra functionality
