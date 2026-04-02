@@ -136,8 +136,6 @@ func (m *ManagementStore) GetAdmins() []nostr.PubKey {
 
 	members = append(members, m.Config.GetOwner())
 
-	members = append(members, m.Config.GetSelf())
-
 	for _, role := range m.Config.Roles {
 		if role.CanManage {
 			for _, pubkey := range role.Pubkeys {
